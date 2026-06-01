@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>極致素材交易所 - 創作者與帶貨神器平台</title>
+  <meta name="description" content="全網最紅商品的免費開箱與帶貨素材平台。家裡的閒置物品就是你的賺錢工具！只需拍下 10 秒展示即可賺取收益。">
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Core stylesheet -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Screen Recording / Focus Blur Overlay -->
+  <div id="screen-guard-overlay" class="screen-guard-overlay hidden">
+    <div class="guard-content">
+      <i class="fa-solid fa-shield-halved guard-icon"></i>
+      <h3>安全防護已啟動</h3>
+      <p>偵測到視窗切換、錄影工具啟動或擷圖行為。</p>
+      <p class="sub">為保障創作者版權，影片內容已暫時進行隱私模糊保護。</p>
+      <button class="btn btn-primary" onclick="app.dismissGuard()">恢復觀看</button>
+    </div>
+  </div>
+
+  <!-- Dynamic Security Floating Watermark Canvas -->
+  <div id="watermark-container" class="watermark-container"></div>
+
+  <!-- App Header -->
+  <header class="app-header">
+    <div class="container header-container">
+      <div class="logo" onclick="app.navigate('home')">
+        <span class="logo-icon"><i class="fa-solid fa-video"></i></span>
+        <span class="logo-text">素材<span class="highlight">交易所</span></span>
+      </div>
+      
+      <nav class="desktop-nav" id="desktop-nav">
+        <!-- Dynimically populated by JS -->
+      </nav>
+
+      <div class="user-status" id="header-user-status">
+        <!-- Dynamically populated by JS -->
+      </div>
+    </div>
+  </header>
+
+  <!-- Main View Container -->
+  <main class="main-content container" id="main-view">
+    
+    <!-- 1. HOME / LANDING PAGE VIEW -->
+    <section id="view-home" class="app-view">
+      <div class="hero-section">
+        <div class="hero-tag">🌟 手機開箱也能變現的全新模式</div>
+        <h1 class="hero-title">網頁首選！<br>最簡單快速的影片素材交易中心</h1>
+        <p class="hero-subtitle">我們連結「創作者」與「帶貨主播」。創作者拍攝產品展示即可累積收益；帶貨者一鍵下載分鏡素材，用剪映批量生成爆款帶貨影片！</p>
+        
+        <div class="hero-actions" id="hero-actions-container">
+          <button class="btn btn-primary btn-lg" onclick="app.openAuthModal('register')">立即註冊，解鎖完整功能</button>
+          <button class="btn btn-outline btn-lg" onclick="app.openAuthModal('login')">已有帳號？快速登入</button>
+        </div>
+      </div>
+
+      <div class="features-grid">
+        <!-- Card 1: Creators -->
+        <div class="feature-card creator-card">
+          <div class="card-badge bg-creator">創作者</div>
+          <div class="card-icon"><i class="fa-solid fa-camera-retro"></i></div>
+          <h3>閒置物品變身賺錢工具</h3>
+          <p class="slogan-preview">不用露臉、不用剪輯，只需拍下 10 秒產品展示上傳，積分累積換取最新爆款好物，讓你免費開箱全網最紅商品！</p>
+          <ul class="feature-list">
+            <li><i class="fa-solid fa-circle-check"></i> 依分鏡拍攝（開箱、展示、效果等）</li>
+            <li><i class="fa-solid fa-circle-check"></i> 免剪輯，上傳 3-5 秒影片即可</li>
+            <li><i class="fa-solid fa-circle-check"></i> 下載即獲收益，累積 1000 元可提領</li>
+            <li><i class="fa-solid fa-circle-check"></i> 10 級創作者等級，享更高下載分成</li>
+          </ul>
+          <button class="btn btn-creator w-100" onclick="app.selectRoleAndGo('creator')">我是創作者 <i class="fa-solid fa-arrow-right"></i></button>
+        </div>
+
+        <!-- Card 2: Sellers -->
+        <div class="feature-card seller-card">
+          <div class="card-badge bg-seller">帶貨主播</div>
+          <div class="card-icon"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
+          <h3>帶貨神器，一鍵搞定分鏡</h3>
+          <p class="slogan-preview">網購產品 1:1 蝦皮比例展示，精準分鏡素材直接一鍵下載，配合剪映批量生成原創帶貨短影音，銷量翻倍！</p>
+          <ul class="feature-list">
+            <li><i class="fa-solid fa-circle-check"></i> 與蝦皮完全相同的 1:1 正方形商品照</li>
+            <li><i class="fa-solid fa-circle-check"></i> 一鍵隨機或自選分鏡下載</li>
+            <li><i class="fa-solid fa-circle-check"></i> 無論有幾個分鏡，每商品僅扣 5 點</li>
+            <li><i class="fa-solid fa-circle-check"></i> 頂級防錄影防外流安全機制</li>
+          </ul>
+          <button class="btn btn-seller w-100" onclick="app.selectRoleAndGo('seller')">我是帶貨主播 <i class="fa-solid fa-arrow-right"></i></button>
+        </div>
+      </div>
+
+      <!-- FAQ or Stats -->
+      <div class="quick-stats">
+        <div class="stat-item">
+          <h4>10k+</h4>
+          <p>總分鏡影片素材</p>
+        </div>
+        <div class="stat-item">
+          <h4>$3.00/10次</h4>
+          <p>基礎下載收益</p>
+        </div>
+        <div class="stat-item">
+          <h4>10 等級</h4>
+          <p>創作者分成晉升機制</p>
+        </div>
+        <div class="stat-item">
+          <h4>100% 同步</h4>
+          <p>手機電腦即時雲端連動</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. CREATOR DASHBOARD VIEW -->
+    <section id="view-creator" class="app-view hidden">
+      <div class="view-header">
+        <div class="welcome-box">
+          <span class="user-avatar-tag creator-bg"><i class="fa-solid fa-video"></i> 創作者</span>
+          <div>
+            <h2 id="creator-greeting">您好，創作者！</h2>
+            <p>你家裡的閒置物品就是你的賺錢工具！不用露臉、不用剪輯，只需拍下 10 秒產品展示上傳，積分累積換取最新爆款好物！</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Creator Stats Cards -->
+      <div class="stats-row">
+        <div class="card stat-subcard">
+          <div class="subcard-title">目前創作者等級</div>
+          <div class="level-badge-container">
+            <span class="level-val" id="creator-level-val">LV.1</span>
+            <span class="level-desc" id="creator-level-desc">基礎創作者</span>
+          </div>
+          <div class="level-progress-bar">
+            <div class="progress-fill" id="creator-level-progress-fill" style="width: 10%;"></div>
+          </div>
+          <div class="level-requirement-txt" id="creator-level-req">再上傳 5 部高品質影片即可升級</div>
+        </div>
+        
+        <div class="card stat-subcard">
+          <div class="subcard-title">帳戶餘額 (累積總金額)</div>
+          <div class="balance-container">
+            <span class="currency">TWD</span>
+            <span class="amount-val" id="creator-balance">0.00</span>
+          </div>
+          <div class="accumulated-sub" id="creator-total-earnings">累積總收益: $0.00</div>
+          <button class="btn btn-sm btn-creator" onclick="app.scrollAndFocus('withdraw-section')">提領明細 / 綁定銀行</button>
+        </div>
+
+        <div class="card stat-subcard">
+          <div class="subcard-title">素材表現指標</div>
+          <div class="download-stats">
+            <div class="stat-mini">
+              <span class="mini-val" id="creator-upload-count">0</span>
+              <span class="mini-lbl">已審核商品數</span>
+            </div>
+            <div class="stat-line"></div>
+            <div class="stat-mini">
+              <span class="mini-val" id="creator-download-count">0</span>
+              <span class="mini-lbl">總被下載次數</span>
+            </div>
+          </div>
+          <div class="download-ranking-sub" id="creator-download-rank">目前排行榜位次：暫無排名</div>
+        </div>
+      </div>
+
+      <!-- Main Uploader and Tutorials Tabs -->
+      <div class="creator-workspace">
+        <div class="workspace-main">
+          <!-- Upload Box -->
+          <div class="card upload-card">
+            <div class="card-header-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+            <h3>上傳全新帶貨商品素材</h3>
+            <p class="section-desc">請依照要求上傳 1:1 正方形商品照，並在下方上傳 3~5 秒的各分鏡影片。經後台審核後，會同步上架至「帶貨神器」供主播下載。</p>
+            
+            <form id="creator-upload-form" onsubmit="app.handleCreatorUpload(event)">
+              <!-- 1. Product Basic Info -->
+              <div class="form-group row-fields">
+                <div class="field-item">
+                  <label class="required-lbl">產品名稱</label>
+                  <input type="text" id="upload-product-name" placeholder="請輸入產品名稱 (如: 極簡智能保溫杯)" required>
+                </div>
+                <div class="field-item">
+                  <label class="required-lbl">商品封面照片 (正方形 1:1 蝦皮比例)</label>
+                  <div class="photo-upload-wrapper">
+                    <input type="file" id="upload-product-photo" accept="image/*" onchange="app.previewProductPhoto(event)" required style="display:none;">
+                    <div class="photo-preview-placeholder" onclick="document.getElementById('upload-product-photo').click()">
+                      <img id="photo-preview" class="hidden" src="" alt="商品封面">
+                      <div class="placeholder-content" id="photo-placeholder-content">
+                        <i class="fa-regular fa-image"></i>
+                        <span>點擊上傳封面圖 (建議正方形)</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 2. Video Multi-Scene Uploaders -->
+              <div class="scene-upload-section">
+                <h4 class="required-lbl">上傳 3~5 秒影片分鏡 (可一次上傳多個影片，不限一部)</h4>
+                
+                <div class="scenes-grid">
+                  <!-- Scene 1: Unboxing -->
+                  <div class="scene-item-card" data-scene="unboxing">
+                    <div class="scene-card-header">
+                      <span class="scene-title"><i class="fa-solid fa-box-open text-creator"></i> 1. 開箱分鏡</span>
+                      <span class="badge badge-required">推薦</span>
+                    </div>
+                    <div class="scene-uploader-dropzone" onclick="document.getElementById('video-unboxing').click()">
+                      <input type="file" id="video-unboxing" accept="video/*" multiple onchange="app.handleVideoChange(event, 'unboxing')" style="display:none;">
+                      <i class="fa-solid fa-circle-plus"></i>
+                      <span>上傳影片</span>
+                    </div>
+                    <div class="scene-file-list" id="file-list-unboxing"></div>
+                  </div>
+
+                  <!-- Scene 2: Display -->
+                  <div class="scene-item-card" data-scene="display">
+                    <div class="scene-card-header">
+                      <span class="scene-title"><i class="fa-solid fa-cube text-creator"></i> 2. 產品展示</span>
+                      <span class="badge badge-required">推薦</span>
+                    </div>
+                    <div class="scene-uploader-dropzone" onclick="document.getElementById('video-display').click()">
+                      <input type="file" id="video-display" accept="video/*" multiple onchange="app.handleVideoChange(event, 'display')" style="display:none;">
+                      <i class="fa-solid fa-circle-plus"></i>
+                      <span>上傳影片</span>
+                    </div>
+                    <div class="scene-file-list" id="file-list-display"></div>
+                  </div>
+
+                  <!-- Scene 3: Effect -->
+                  <div class="scene-item-card" data-scene="effect">
+                    <div class="scene-card-header">
+                      <span class="scene-title"><i class="fa-solid fa-bolt text-creator"></i> 3. 產品效果</span>
+                    </div>
+                    <div class="scene-uploader-dropzone" onclick="document.getElementById('video-effect').click()">
+                      <input type="file" id="video-effect" accept="video/*" multiple onchange="app.handleVideoChange(event, 'effect')" style="display:none;">
+                      <i class="fa-solid fa-circle-plus"></i>
+                      <span>上傳影片</span>
+                    </div>
+                    <div class="scene-file-list" id="file-list-effect"></div>
+                  </div>
+
+                  <!-- Scene 4: Detail -->
+                  <div class="scene-item-card" data-scene="detail">
+                    <div class="scene-card-header">
+                      <span class="scene-title"><i class="fa-solid fa-magnifying-glass text-creator"></i> 4. 產品細節</span>
+                    </div>
+                    <div class="scene-uploader-dropzone" onclick="document.getElementById('video-detail').click()">
+                      <input type="file" id="video-detail" accept="video/*" multiple onchange="app.handleVideoChange(event, 'detail')" style="display:none;">
+                      <i class="fa-solid fa-circle-plus"></i>
+                      <span>上傳影片</span>
+                    </div>
+                    <div class="scene-file-list" id="file-list-detail"></div>
+                  </div>
+
+                  <!-- Scene 5: Usage -->
+                  <div class="scene-item-card" data-scene="usage">
+                    <div class="scene-card-header">
+                      <span class="scene-title"><i class="fa-solid fa-hand-holding-hand text-creator"></i> 5. 產品使用</span>
+                    </div>
+                    <div class="scene-uploader-dropzone" onclick="document.getElementById('video-usage').click()">
+                      <input type="file" id="video-usage" accept="video/*" multiple onchange="app.handleVideoChange(event, 'usage')" style="display:none;">
+                      <i class="fa-solid fa-circle-plus"></i>
+                      <span>上傳影片</span>
+                    </div>
+                    <div class="scene-file-list" id="file-list-usage"></div>
+                  </div>
+
+                  <!-- Scene 6: Other -->
+                  <div class="scene-item-card" data-scene="other">
+                    <div class="scene-card-header">
+                      <span class="scene-title"><i class="fa-solid fa-ellipsis text-creator"></i> 6. 其他分鏡</span>
+                    </div>
+                    <div class="scene-uploader-dropzone" onclick="document.getElementById('video-other').click()">
+                      <input type="file" id="video-other" accept="video/*" multiple onchange="app.handleVideoChange(event, 'other')" style="display:none;">
+                      <i class="fa-solid fa-circle-plus"></i>
+                      <span>上傳影片</span>
+                    </div>
+                    <div class="scene-file-list" id="file-list-other"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="submit-wrap">
+                <button type="submit" class="btn btn-creator btn-lg w-100"><i class="fa-solid fa-paper-plane"></i> 提交審核並發布</button>
+              </div>
+            </form>
+          </div>
+
+          <!-- Payout and Bank Account Binding Section -->
+          <div class="card" id="withdraw-section">
+            <h3><i class="fa-solid fa-wallet text-creator"></i> 收益提取與銀行資訊</h3>
+            <p class="section-desc">帳戶餘額累積達到 <span class="text-creator fw-bold">$1000 元</span> 即可申請提領。請在下方綁定您的轉帳銀行帳戶。</p>
+            
+            <div class="bank-form-grid">
+              <div class="bank-config-box">
+                <h4>綁定收款銀行帳戶</h4>
+                <div class="form-group">
+                  <label>銀行代碼與名稱</label>
+                  <input type="text" id="bank-name" placeholder="例如: 822 中國信託銀行">
+                </div>
+                <div class="form-group">
+                  <label>分行名稱</label>
+                  <input type="text" id="bank-branch" placeholder="例如: 敦北分行 (非必填)">
+                </div>
+                <div class="form-group">
+                  <label>戶名</label>
+                  <input type="text" id="bank-user" placeholder="必須與身份證姓名相符">
+                </div>
+                <div class="form-group">
+                  <label>銀行帳號</label>
+                  <input type="text" id="bank-account-num" placeholder="請輸入純數字銀行帳號">
+                </div>
+                <button class="btn btn-outline w-100" onclick="app.saveBankInfo()"><i class="fa-solid fa-floppy-disk"></i> 儲存銀行綁定</button>
+              </div>
+
+              <div class="withdraw-action-box">
+                <div class="wallet-balance-card">
+                  <span>可提領餘額</span>
+                  <h2 id="creator-withdraw-balance">$0.00</h2>
+                  <p class="sub-alert" id="withdraw-limit-status">滿 $1000 即可申請提領</p>
+                </div>
+
+                <div class="form-group">
+                  <label>提領金額</label>
+                  <input type="number" id="withdraw-amount" min="1000" placeholder="最低 $1000 元">
+                </div>
+                <button class="btn btn-creator w-100 btn-lg" id="btn-submit-withdrawal" onclick="app.requestWithdrawal()" disabled><i class="fa-solid fa-money-bill-transfer"></i> 申請提領</button>
+              </div>
+            </div>
+
+            <!-- Withdrawal Records Table -->
+            <div class="withdrawal-records mt-4">
+              <h4>提領紀錄</h4>
+              <div class="table-responsive">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>申請時間</th>
+                      <th>銀行帳號</th>
+                      <th>提領金額</th>
+                      <th>目前狀態</th>
+                    </tr>
+                  </thead>
+                  <tbody id="withdrawal-records-list">
+                    <!-- Rendered by JS -->
+                    <tr>
+                      <td colspan="4" class="text-center">暫無提領紀錄</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sidebar Tutorials and Rank info -->
+        <aside class="workspace-sidebar">
+          <!-- Shooting Tutorials -->
+          <div class="card tutorial-sidebar-card">
+            <h3><i class="fa-solid fa-graduation-cap text-creator"></i> 拍攝實用教學</h3>
+            <p class="section-desc">簡單上手，新手必看！各個分鏡都有特定鏡頭要領，快跟著拍：</p>
+            
+            <div class="tutorial-accordion">
+              <div class="accordion-item">
+                <div class="accordion-header" onclick="app.toggleAccordion(this)">
+                  <span>🎥 1. 開箱分鏡教學</span>
+                  <i class="fa-solid fa-chevron-down"></i>
+                </div>
+                <div class="accordion-body">
+                  <p><strong>要領：</strong>從紙箱/包裝袋拆開的第 1 秒特寫。展示包裝的精美感，動作爽快俐落。</p>
+                  <p><strong>建議時長：</strong>3-5 秒，手部出鏡即可，免露臉。</p>
+                </div>
+              </div>
+
+              <div class="accordion-item">
+                <div class="accordion-header" onclick="app.toggleAccordion(this)">
+                  <span>📦 2. 產品展示分鏡教學</span>
+                  <i class="fa-solid fa-chevron-down"></i>
+                </div>
+                <div class="accordion-body">
+                  <p><strong>要領：</strong>拿著商品，背景乾淨（白牆、簡約桌面），從各個角度（正面、側面）360度展示外觀。</p>
+                  <p><strong>建議時長：</strong>3-5 秒，保持手部平穩或使用轉盤。</p>
+                </div>
+              </div>
+
+              <div class="accordion-item">
+                <div class="accordion-header" onclick="app.toggleAccordion(this)">
+                  <span>⚡ 3. 產品效果分鏡教學</span>
+                  <i class="fa-solid fa-chevron-down"></i>
+                </div>
+                <div class="accordion-body">
+                  <p><strong>要領：</strong>呈現產品最直接的功能「亮點」。例如保溫杯裝熱水冒煙、去污膏擦一下變乾淨。</p>
+                  <p><strong>建議時長：</strong>3-4 秒，效果前後對比越明顯越好。</p>
+                </div>
+              </div>
+
+              <div class="accordion-item">
+                <div class="accordion-header" onclick="app.toggleAccordion(this)">
+                  <span>🔍 4. 產品細節分鏡教學</span>
+                  <i class="fa-solid fa-chevron-down"></i>
+                </div>
+                <div class="accordion-body">
+                  <p><strong>要領：</strong>微距近距離特寫產品的材質、縫線、按鈕、商標或防偽標籤。展現高級質感。</p>
+                  <p><strong>建議時長：</strong>3 秒內，對焦要清晰，光線要充足。</p>
+                </div>
+              </div>
+
+              <div class="accordion-item">
+                <div class="accordion-header" onclick="app.toggleAccordion(this)">
+                  <span>🤝 5. 產品使用分鏡教學</span>
+                  <i class="fa-solid fa-chevron-down"></i>
+                </div>
+                <div class="accordion-body">
+                  <p><strong>要領：</strong>第一人稱視角或手部動作展示實際如何使用。例如按開關、喝水、穿戴在身上等。</p>
+                  <p><strong>建議時長：</strong>3-5 秒，注重操作的簡易度。</p>
+                </div>
+              </div>
+
+              <div class="accordion-item">
+                <div class="accordion-header" onclick="app.toggleAccordion(this)">
+                  <span>⚙️ 6. 其他分鏡教學</span>
+                  <i class="fa-solid fa-chevron-down"></i>
+                </div>
+                <div class="accordion-body">
+                  <p><strong>要領：</strong>發揮創意的分鏡，例如產品掉入水中、敲擊聲音特寫、包裝被擠壓或搭配其他場景的畫面。</p>
+                  <p><strong>建議時長：</strong>3-5 秒。</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Rank system Info -->
+          <div class="card rank-info-card">
+            <h3><i class="fa-solid fa-ranking-star text-creator"></i> 創作者十個等級權益</h3>
+            <p class="section-desc">上傳越多高品質商品，等級與收益分成將大幅提升！</p>
+            
+            <div class="rank-list-mini">
+              <div class="rank-step current-rank-step" id="rank-step-1">
+                <span class="rank-lvl">LV.1</span>
+                <span class="rank-name">新手創作者</span>
+                <span class="rank-payout">10次下載 / <b class="text-creator">$3.0</b></span>
+              </div>
+              <div class="rank-step" id="rank-step-2">
+                <span class="rank-lvl">LV.2</span>
+                <span class="rank-name">新秀創作者</span>
+                <span class="rank-payout">10次下載 / <b class="text-creator">$3.5</b></span>
+              </div>
+              <div class="rank-step" id="rank-step-3">
+                <span class="rank-lvl">LV.3</span>
+                <span class="rank-name">進階創作者</span>
+                <span class="rank-payout">10次下載 / <b class="text-creator">$4.0</b></span>
+              </div>
+              <div class="rank-step" id="rank-step-4">
+                <span class="rank-lvl">LV.4</span>
+                <span class="rank-name">銅牌創作者</span>
+                <span class="rank-payout">10次下載 / <b class="text-creator">$4.5</b></span>
+              </div>
+              <div class="rank-step" id="rank-step-5">
+                <span class="rank-lvl">LV.5</span>
+                <span class="rank-name">銀牌創作者</span>
+                <span class="rank-payout">10次下載 / <b class="text-creator">$5.0</b></span>
+              </div>
+              <div class="rank-step" id="rank-step-6">
+                <span class="rank-lvl">LV.6</span>
+                <span class="rank-name">金牌創作者</span>
+                <span class="rank-payout">10次下載 / <b class="text-creator">$6.0</b></span>
+              </div>
+              <div class="rank-step" id="rank-step-7">
+                <span class="rank-lvl">LV.7</span>
+                <span class="rank-name">白金創作者</span>
+                <span class="rank-payout">10次下載 / <b class="text-creator">$7.0</b></span>
+              </div>
+              <div class="rank-step" id="rank-step-8">
+                <span class="rank-lvl">LV.8</span>
+                <span class="rank-name">鑽石創作者</span>
+                <span class="rank-payout">10次下載 / <b class="text-creator">$8.0</b></span>
+              </div>
+              <div class="rank-step" id="rank-step-9">
+                <span class="rank-lvl">LV.9</span>
+                <span class="rank-name">大師創作者</span>
+                <span class="rank-payout">10次下載 / <b class="text-creator">$9.0</b></span>
+              </div>
+              <div class="rank-step" id="rank-step-10">
+                <span class="rank-lvl">LV.10</span>
+                <span class="rank-name">傳奇創作者</span>
+                <span class="rank-payout">10次下載 / <b class="text-creator">$10.0</b></span>
+              </div>
+            </div>
+            
+            <div class="rank-rule-footer">
+              <i class="fa-solid fa-circle-info"></i> 每上傳 5 部商品且其中 2 部經管理員標記為「高品質」，即可提升一級！最高每10個人下載可得 $10 元收益。
+            </div>
+          </div>
+
+          <!-- Creator Rankings Leaderboard -->
+          <div class="card leaderboard-card">
+            <h3><i class="fa-solid fa-crown text-amber"></i> 本月熱門創作者排行</h3>
+            <p class="section-desc">素材被主播下載數最高的前五名創作者：</p>
+            <div class="leaderboard-list" id="creator-leaderboard-list">
+              <!-- Rendered dynamically by JS -->
+            </div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- 3. SELLER / AFFILIATE DASHBOARD VIEW (帶貨神器) -->
+    <section id="view-seller" class="app-view hidden">
+      <div class="view-header">
+        <div class="welcome-box">
+          <span class="user-avatar-tag seller-bg"><i class="fa-solid fa-wand-magic-sparkles"></i> 帶貨神器</span>
+          <div>
+            <h2 id="seller-greeting">您好，帶貨主播！</h2>
+            <p>在這裡尋找爆款產品的高清分鏡素材。一鍵下載拼裝，再以剪映批量生成，省去實體開箱拍攝成本！</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Seller Stats Cards -->
+      <div class="stats-row">
+        <div class="card stat-subcard">
+          <div class="subcard-title">可用點數積分</div>
+          <div class="balance-container">
+            <span class="points-val" id="seller-credits">0</span>
+            <span class="points-unit">Points</span>
+          </div>
+          <div class="accumulated-sub">1 點 = TWD $1 元</div>
+          <button class="btn btn-sm btn-seller mt-2" onclick="app.openRechargeModal()"><i class="fa-solid fa-wallet"></i> 儲存積分點數</button>
+        </div>
+
+        <div class="card stat-subcard">
+          <div class="subcard-title">下載素材消耗規則</div>
+          <div class="download-stats py-2">
+            <div class="stat-mini">
+              <span class="mini-val text-seller">5 點</span>
+              <span class="mini-lbl">每商品分鏡</span>
+            </div>
+            <div class="stat-line"></div>
+            <div class="stat-mini" style="max-width: 60%;">
+              <p class="mb-0 text-muted" style="font-size: 11px; text-align: left; line-height: 1.4;">
+                <i class="fa-solid fa-circle-check text-seller"></i> 不限商品內分鏡個數<br>
+                <i class="fa-solid fa-circle-check text-seller"></i> 一次打包下載僅扣 5 點
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="card stat-subcard">
+          <div class="subcard-title">帶貨神器极簡工作流</div>
+          <div class="workflow-steps-mini">
+            <span class="step-badge">1. 下載分鏡</span>
+            <span class="arrow-indicator"><i class="fa-solid fa-caret-right"></i></span>
+            <span class="step-badge">2. 導入剪映</span>
+            <span class="arrow-indicator"><i class="fa-solid fa-caret-right"></i></span>
+            <span class="step-badge">3. 批量生成</span>
+          </div>
+          <button class="btn btn-outline btn-sm w-100 mt-2" onclick="app.scrollAndFocus('seller-tutorial-section')">查看詳細帶貨教學</button>
+        </div>
+      </div>
+
+      <div class="seller-main-layout">
+        <!-- Products Grid Area -->
+        <div class="products-container">
+          <div class="filter-bar">
+            <h3><i class="fa-solid fa-fire text-seller"></i> 爆款商品素材庫</h3>
+            <div class="filter-actions">
+              <!-- Search and Categories -->
+              <input type="text" id="seller-search" oninput="app.filterProducts()" placeholder="搜尋產品名稱...">
+            </div>
+          </div>
+
+          <!-- The Shopee-Style Grid -->
+          <div class="products-grid" id="seller-products-grid">
+            <!-- Dynamic product cards rendered by JS -->
+          </div>
+        </div>
+
+        <!-- Sidebar for Popular trends -->
+        <aside class="seller-sidebar">
+          <!-- Popular creators of the week -->
+          <div class="card trend-sidebar-card">
+            <h3><i class="fa-solid fa-users text-seller"></i> 熱門帶貨創作者</h3>
+            <p class="section-desc">上傳分鏡質量最高、受帶貨者青睞的創作者：</p>
+            <div class="trend-list" id="seller-trending-creators">
+              <!-- Rendered by JS -->
+            </div>
+          </div>
+
+          <!-- Popular Downloads -->
+          <div class="card trend-sidebar-card">
+            <h3><i class="fa-solid fa-arrow-trend-up text-seller"></i> 熱門商品下載榜</h3>
+            <p class="section-desc">近期被打包下載次數最多的熱門商品素材：</p>
+            <div class="trend-list" id="seller-trending-products">
+              <!-- Rendered by JS -->
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <!-- Seller Detailed Tutorial Section -->
+      <div class="card mt-4" id="seller-tutorial-section">
+        <h3><i class="fa-solid fa-book-open text-seller"></i> 帶貨神器教學頁面</h3>
+        <p class="section-desc">四個步驟快速開搞，利用現成素材批量產出原創帶貨短影音，引爆佣金收益！</p>
+        
+        <div class="tutorial-steps-grid">
+          <div class="tutorial-step-card">
+            <div class="step-num">1</div>
+            <h4>下載多鏡頭分鏡</h4>
+            <p>點擊上方爆款商品，選擇下載「全套分鏡影片」或勾選個別分鏡。系統將打包無浮水印的高畫質影片供您剪輯使用。</p>
+          </div>
+
+          <div class="tutorial-step-card">
+            <div class="step-num">2</div>
+            <h4>導入「剪映」軟體</h4>
+            <p>打開手機或電腦版「剪映」，建立新專案，將下載好的「開箱、展示、效果、細節、使用、其他」分鏡影片全數導入素材庫。</p>
+          </div>
+
+          <div class="tutorial-step-card">
+            <div class="step-num">3</div>
+            <h4>批量智能生成</h4>
+            <p>使用剪映的「圖文成片」或「智能剪輯/批量模板」功能，隨機打亂分鏡順序，套用熱門帶貨BGM與AI配音旁白。</p>
+          </div>
+
+          <div class="tutorial-step-card">
+            <div class="step-num">4</div>
+            <h4>原創過審與發布</h4>
+            <p>由於各個素材隨機拼裝並調整了色調與轉場，生成的影片可100%通過平台的去重算法，快速掛載商品連結進行帶貨！</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. ADMIN BACKEND VIEW (後台管理) -->
+    <section id="view-admin" class="app-view hidden">
+      <div class="view-header">
+        <div class="welcome-box admin-bg">
+          <span class="user-avatar-tag admin-badge"><i class="fa-solid fa-user-gear"></i> 後台系統</span>
+          <div>
+            <h2>素材交易所控制中心</h2>
+            <p>審核創作者上傳的影片分鏡、批准提領款項、並管理使用者資料與點數。</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Admin Tabs -->
+      <div class="admin-tabs">
+        <button class="admin-tab-btn active" onclick="app.switchAdminTab('approve-materials', this)">審核商品素材 (<span id="admin-pending-materials-count">0</span>)</button>
+        <button class="admin-tab-btn" onclick="app.switchAdminTab('approve-withdrawals', this)">審核提領申請 (<span id="admin-pending-withdrawals-count">0</span>)</button>
+        <button class="admin-tab-btn" onclick="app.switchAdminTab('users-management', this)">用戶管理</button>
+      </div>
+
+      <!-- Admin Tab Content 1: Approve Materials -->
+      <div id="admin-tab-approve-materials" class="admin-tab-content">
+        <div class="card">
+          <h3>待審核商品影片列表</h3>
+          <p class="section-desc">請仔細查閱創作者上傳的 1:1 照片與各項影片分鏡，確認質量合格後發布同步上架至帶貨神器。</p>
+          
+          <div class="pending-materials-list" id="admin-pending-materials-container">
+            <!-- Dynamic pending items render here -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Admin Tab Content 2: Approve Withdrawals -->
+      <div id="admin-tab-approve-withdrawals" class="admin-tab-content hidden">
+        <div class="card">
+          <h3>待審核提領款項</h3>
+          <p class="section-desc">當創作者餘額超過 1000 元並申請提領時，在此處查閱銀行資訊，手動匯款後點擊確認發放。</p>
+          
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>申請創作者</th>
+                  <th>電話/Email</th>
+                  <th>提領金額</th>
+                  <th>銀行帳戶資訊</th>
+                  <th>申請日期</th>
+                  <th>動作</th>
+                </tr>
+              </thead>
+              <tbody id="admin-withdrawals-list">
+                <!-- Rendered by JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Admin Tab Content 3: Users Management -->
+      <div id="admin-tab-users-management" class="admin-tab-content hidden">
+        <div class="card">
+          <h3>註冊用戶總覽 (創作者與帶貨主播)</h3>
+          <p class="section-desc">可在此處修改使用者帳戶餘額、等級，方便直接進行功能演示與測試。</p>
+          
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>姓名</th>
+                  <th>註冊電話</th>
+                  <th>Email</th>
+                  <th>角色類別</th>
+                  <th>餘額 / 積分點數</th>
+                  <th>等級 / 權益</th>
+                  <th>權益修改 / 充值測試</th>
+                </tr>
+              </thead>
+              <tbody id="admin-users-list">
+                <!-- Rendered by JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- LINE@ Floating Customer Service -->
+  <a href="https://line.me/R/ti/p/@yourlineid" target="_blank" class="line-float-btn" title="聯繫LINE@客服">
+    <span class="line-icon"><i class="fa-brands fa-line"></i></span>
+    <span class="line-text">客服 LINE@</span>
+  </a>
+
+  <!-- RECHARGE POINTS MODAL (帶貨者儲值) -->
+  <div id="recharge-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-wallet text-seller"></i> 帶貨神器 - 積分儲值</h3>
+        <button class="modal-close" onclick="app.closeRechargeModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-4">請選擇您要儲值的積分方案。1 積分可折抵 1 元下載消費。下載一部商品之全套分鏡固定扣除 5 點積分。</p>
+        
+        <div class="recharge-grid">
+          <!-- Bundle 1 -->
+          <div class="recharge-item" onclick="app.selectRechargeBundle(2000, 0)">
+            <div class="bundle-head">標準方案</div>
+            <div class="bundle-price">$2,000</div>
+            <div class="bundle-desc">獲得 <b>2,000</b> 積分</div>
+            <div class="bundle-footer">無贈送額外點數</div>
+          </div>
+
+          <!-- Bundle 2 -->
+          <div class="recharge-item recommended-bundle" onclick="app.selectRechargeBundle(5000, 200)">
+            <div class="bundle-badge">熱門推薦</div>
+            <div class="bundle-head">超值方案</div>
+            <div class="bundle-price">$5,000</div>
+            <div class="bundle-desc">獲得 <b>5,200</b> 積分</div>
+            <div class="bundle-footer">額外贈送 <b>$200</b> (4% 回饋)</div>
+          </div>
+
+          <!-- Bundle 3 -->
+          <div class="recharge-item" onclick="app.selectRechargeBundle(10000, 500)">
+            <div class="bundle-head">尊榮尊享方案</div>
+            <div class="bundle-price">$10,000</div>
+            <div class="bundle-desc">獲得 <b>10,500</b> 積分</div>
+            <div class="bundle-footer">額外贈送 <b>$500</b> (5% 回饋)</div>
+          </div>
+        </div>
+
+        <div class="gateway-placeholder-info mt-4">
+          <i class="fa-solid fa-circle-exclamation text-seller"></i> 金流串接將於後續合約簽訂後正式綁定。目前點擊上方任意方案即可直接模擬儲值成功！
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AUTHENTICATION MODAL (REGISTER / LOGIN) -->
+  <div id="auth-modal" class="modal-overlay hidden">
+    <div class="modal-card auth-modal-card">
+      <div class="modal-header">
+        <h3 id="auth-modal-title">註冊新帳號</h3>
+        <button class="modal-close" onclick="app.closeAuthModal()">&times;</button>
+      </div>
+      
+      <div class="modal-body">
+        <!-- Auth tabs -->
+        <div class="auth-tabs">
+          <button id="auth-tab-register" class="auth-tab-btn active" onclick="app.switchAuthTab('register')">註冊帳號</button>
+          <button id="auth-tab-login" class="auth-tab-btn" onclick="app.switchAuthTab('login')">電話登入</button>
+        </div>
+
+        <!-- 1. REGISTER FORM -->
+        <form id="auth-register-form" onsubmit="app.handleRegister(event)">
+          <div class="form-group">
+            <label class="required-lbl">真實姓名</label>
+            <input type="text" id="reg-name" placeholder="請輸入您的姓名 (如: 王小明)" required>
+          </div>
+          <div class="form-group">
+            <label class="required-lbl">電話號碼</label>
+            <input type="tel" id="reg-phone" placeholder="請輸入電話號碼 (登入用，如: 0912345678)" required>
+          </div>
+          <div class="form-group">
+            <label class="required-lbl">Email 信箱</label>
+            <input type="email" id="reg-email" placeholder="請輸入 Email (如: name@example.com)" required>
+          </div>
+          
+          <div class="form-group">
+            <label class="required-lbl">我要成為哪種會員角色？</label>
+            <div class="role-selector-radios">
+              <label class="role-radio-label">
+                <input type="radio" name="reg-role" value="creator" checked required>
+                <div class="role-radio-box creator-border">
+                  <i class="fa-solid fa-video"></i>
+                  <span><b>創作者</b></span>
+                  <span class="sub">上傳 10 秒展示片賺錢</span>
+                </div>
+              </label>
+              <label class="role-radio-label">
+                <input type="radio" name="reg-role" value="seller" required>
+                <div class="role-radio-box seller-border">
+                  <i class="fa-solid fa-wand-magic-sparkles"></i>
+                  <span><b>帶貨主播</b></span>
+                  <span class="sub">下載分鏡批量生成短片</span>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Legal Agreement Checkbox -->
+          <div class="form-group checkbox-group mt-3">
+            <label class="checkbox-container">
+              <input type="checkbox" id="reg-agreement" required>
+              <span class="checkmark"></span>
+              <span class="agreement-text">
+                用戶承諾於本平台上傳之所有視頻素材，皆為本人原創實拍或已取得完整合法之商用授權。若因素材內容侵害他人之著作權、肖像權或商標權，上傳者須承擔一切法律與賠償責任，本平台不負連帶擔保責任。
+              </span>
+            </label>
+          </div>
+
+          <button type="submit" class="btn btn-primary w-100 btn-lg mt-3">同意條款並完成註冊</button>
+        </form>
+
+        <!-- 2. LOGIN FORM -->
+        <form id="auth-login-form" class="hidden" onsubmit="app.handleLogin(event)">
+          <p class="section-desc mb-3">註冊後，即可直接使用綁定的電話號碼進行一鍵登入。</p>
+          <div class="form-group">
+            <label class="required-lbl">註冊時的電話號碼</label>
+            <input type="tel" id="login-phone" placeholder="請輸入註冊的電話號碼 (如: 0912345678)" required>
+          </div>
+          <button type="submit" class="btn btn-primary w-100 btn-lg mt-3">一鍵登入</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- PRODUCT DETAIL LIGHTBOX (帶貨神器商品詳情及分鏡下載) -->
+  <div id="product-detail-modal" class="modal-overlay hidden">
+    <div class="modal-card detail-modal-card">
+      <div class="modal-header">
+        <h3 id="modal-product-name">產品名稱</h3>
+        <button class="modal-close" onclick="app.closeProductDetailModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="detail-split-layout">
+          <!-- Left side: 1:1 image and video player -->
+          <div class="detail-media-panel">
+            <div class="image-1-1-container">
+              <img id="modal-product-photo" src="" alt="產品封面">
+            </div>
+            
+            <div class="active-video-player-container hidden" id="detail-video-player-box">
+              <div class="anti-recording-tag"><i class="fa-solid fa-shield"></i> 浮水印已嵌入 & 防錄製保護中</div>
+              <video id="modal-video-player" controls controlslist="nodownload" oncontextmenu="return false;"></video>
+              <div class="watermark-layer-on-video" id="video-watermark-overlay">您的姓名 0912***3456 防盜拷</div>
+            </div>
+          </div>
+
+          <!-- Right side: Scene selector & download actions -->
+          <div class="detail-info-panel">
+            <div class="seller-payout-reminder">
+              <i class="fa-solid fa-ticket-simple"></i> 打包下載此商品所有分鏡影片固定扣除 <b>5 點積分</b> (不限分鏡個數)。
+            </div>
+            
+            <div class="product-scenes-selector mt-3">
+              <h4>選擇要播放或下載的分鏡影片</h4>
+              <p class="section-desc">點擊影片名稱可在左側直接預覽播放，勾選多選框以打包下載：</p>
+              
+              <div class="scenes-list-group" id="modal-scenes-list">
+                <!-- Populated dynamically by JS -->
+              </div>
+            </div>
+
+            <div class="download-actions-row mt-4">
+              <button class="btn btn-outline" id="btn-download-selected" onclick="app.downloadSelectedScenes()"><i class="fa-solid fa-download"></i> 下載所選分鏡</button>
+              <button class="btn btn-seller" id="btn-download-all" onclick="app.downloadAllScenes()"><i class="fa-solid fa-shuffle"></i> 一鍵隨機打包下載全部 (扣除 5 點)</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Realtime Sync Log Indicator (Cloud Sync) -->
+  <div id="cloud-sync-toast" class="cloud-sync-toast">
+    <i class="fa-solid fa-rotate-right fa-spin text-creator"></i> <span>雲端資料庫已實時同步完成</span>
+  </div>
+
+  <!-- Footer -->
+  <footer class="app-footer text-center">
+    <div class="container">
+      <p>&copy; 2026 極致素材交易所 版權所有。本平台已啟用安全防護浮水印與視窗反截圖機制。</p>
+      <p class="footer-desc">本網站已完美相容於手機 Safari、Chrome 及各類行動瀏覽器，支援同步登入資訊與即時雲端備份。</p>
+    </div>
+  </footer>
+
+  <!-- Responsive Mobile Bottom Nav -->
+  <nav class="mobile-bottom-nav" id="mobile-bottom-nav">
+    <!-- Dynimically populated by JS -->
+  </nav>
+
+  <!-- Core Javascript code -->
+  <script src="app.js"></script>
+</body>
+</html>

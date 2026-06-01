@@ -2539,6 +2539,7 @@ video.private-blur {
    CLOUD SYNC CONNECTION BANNER STYLES
 ----------------------------------------- */
 .cloud-sync-banner {
+  display: none !important; /* Completely hidden for clean production layout */
   background-color: var(--bg-tertiary);
   border-bottom: 1px solid var(--border-light);
   padding: 8px 0;

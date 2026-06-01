@@ -1961,8 +1961,38 @@ class AppEngine {
     this.closeProductDetailModal();
   }
 
-  triggerBrowserDownload(url, filename) {
-    // Standard link download fallback for browser
+  async triggerBrowserDownload(url, filename) {
+    // 1. If it's a Supabase URL, append '?download=' to force Content-Disposition attachment header on server-side
+    if (url.includes('supabase') && !url.includes('download=')) {
+      url = url.includes('?') ? `${url}&download=` : `${url}?download=`;
+    }
+
+    // 2. Mobile Browser Optimization: Use fetch to get file as a Blob, then trigger download
+    // This forces iOS Safari and Android Chrome to download the file directly instead of opening to play
+    if (url.startsWith('http') && !url.includes(window.location.origin)) {
+      try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error("Network response was not ok");
+        
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        // Revoke the blob URL to release memory
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 200);
+        return;
+      } catch (err) {
+        console.warn("Direct blob download failed, falling back to standard download link:", err);
+      }
+    }
+
+    // 3. Standard Fallback Link
     const link = document.createElement('a');
     link.href = url;
     link.download = filename;

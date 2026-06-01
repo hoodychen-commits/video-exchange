@@ -2606,3 +2606,48 @@ video.private-blur {
     text-align: center;
   }
 }
+
+/* -----------------------------------------
+   CREATOR WORKSPACE TABS & FULL WIDTH
+----------------------------------------- */
+.creator-tabs-nav {
+  display: flex;
+  background-color: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  padding: 6px;
+  gap: 6px;
+  margin-bottom: 20px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.creator-tabs-nav::-webkit-scrollbar {
+  display: none;
+}
+.creator-tab-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: var(--transition-smooth);
+}
+.creator-tab-btn:hover {
+  color: var(--color-creator);
+}
+.creator-tab-btn.active {
+  background-color: var(--color-creator);
+  color: var(--bg-primary);
+  box-shadow: 0 4px 12px rgba(239, 68, 110, 0.25);
+}
+.creator-workspace.full-width {
+  grid-template-columns: 1fr !important;
+}

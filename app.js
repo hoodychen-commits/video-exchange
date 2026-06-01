@@ -24,6 +24,7 @@ class AppEngine {
     this.products = [];
     this.withdrawals = [];
     this.activeView = 'home';
+    this.activeCreatorTab = 'dashboard';
     this.adminActiveTab = 'approve-materials';
     this.adminProductFilter = 'pending';
     this.uploadedFiles = {
@@ -674,7 +675,7 @@ class AppEngine {
     this.activeView = viewId;
     
     // Toggle active classes on sections
-    const views = ['home', 'creator', 'seller', 'admin'];
+    const views = ['home', 'creator', 'seller', 'admin', 'profile'];
     views.forEach(v => {
       const el = document.getElementById(`view-${v}`);
       if (el) {
@@ -685,6 +686,10 @@ class AppEngine {
         }
       }
     });
+
+    if (viewId === 'profile') {
+      this.renderProfile();
+    }
 
     // Reset uploader form files preview when leaving creator panel
     if (viewId !== 'creator') {
@@ -789,11 +794,11 @@ class AppEngine {
         `;
       }
 
-      // Add logout item to mobile bottom nav
+      // Add profile/user settings tab to mobile bottom nav, replacing the raw logout button
       mobileHtml += `
-        <div class="mobile-nav-item" onclick="app.logout()">
-          <i class="fa-solid fa-right-from-bracket"></i>
-          <span>登出</span>
+        <div class="mobile-nav-item ${this.activeView === 'profile' ? 'active' : ''}" onclick="app.navigate('profile')">
+          <i class="fa-solid fa-user-gear"></i>
+          <span>我的</span>
         </div>
       `;
 
@@ -801,11 +806,12 @@ class AppEngine {
       let displayBal = this.currentUser.role === 'creator' ? `$${this.currentUser.balance.toFixed(2)}` : `${this.currentUser.seller_credits} 積分`;
       let switchBtnHtml = hasDoubleRoles ? `<button class="btn btn-outline btn-sm text-amber" onclick="app.switchActiveRole()"><i class="fa-solid fa-arrows-rotate"></i> 切換身分</button>` : '';
       userStatus.innerHTML = `
-        <div class="user-badge-header">
+        <div class="user-badge-header" onclick="app.navigate('profile')" style="cursor:pointer;" title="進入個人中心">
           <i class="fa-solid fa-user"></i>
           <span><b>${this.currentUser.name}</b> (${displayBal})</span>
         </div>
         ${switchBtnHtml}
+        <button class="btn btn-outline btn-sm" onclick="app.navigate('profile')"><i class="fa-solid fa-user-gear"></i> 個人中心</button>
         <button class="btn btn-outline btn-sm" onclick="app.logout()"><i class="fa-solid fa-right-from-bracket"></i> 登出</button>
       `;
 
@@ -1137,6 +1143,9 @@ class AppEngine {
 
     // Render My Products List
     this.renderCreatorProductsList();
+
+    // Re-apply tab state
+    this.switchCreatorTab(this.activeCreatorTab);
   }
 
   renderCreatorProductsList() {
@@ -1210,6 +1219,109 @@ class AppEngine {
     });
 
     listBody.innerHTML = html;
+  }
+
+  switchCreatorTab(tabId) {
+    this.activeCreatorTab = tabId;
+    const tabs = ['dashboard', 'upload', 'portfolio', 'earnings'];
+    
+    const statsRow = document.getElementById('creator-dashboard-stats');
+    const sidebar = document.getElementById('creator-dashboard-sidebar');
+    const uploadPanel = document.getElementById('creator-upload-panel');
+    const portfolioTable = document.getElementById('my-products-portfolio');
+    const withdrawPanel = document.getElementById('withdraw-section');
+    const workspaceLayout = document.getElementById('creator-workspace-layout');
+
+    tabs.forEach(t => {
+      const btn = document.getElementById(`creator-tab-${t}`);
+      if (btn) {
+        if (t === tabId) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
+        }
+      }
+    });
+
+    // 1. Dashboard Tab
+    if (tabId === 'dashboard') {
+      if (statsRow) statsRow.classList.remove('hidden');
+      if (sidebar) sidebar.classList.remove('hidden');
+      if (uploadPanel) uploadPanel.classList.add('hidden');
+      if (portfolioTable) portfolioTable.classList.add('hidden');
+      if (withdrawPanel) withdrawPanel.classList.add('hidden');
+      if (workspaceLayout) workspaceLayout.classList.remove('full-width');
+    }
+    // 2. Upload Tab
+    else if (tabId === 'upload') {
+      if (statsRow) statsRow.classList.add('hidden');
+      if (sidebar) sidebar.classList.add('hidden');
+      if (uploadPanel) uploadPanel.classList.remove('hidden');
+      if (portfolioTable) portfolioTable.classList.add('hidden');
+      if (withdrawPanel) withdrawPanel.classList.add('hidden');
+      if (workspaceLayout) workspaceLayout.classList.add('full-width');
+    }
+    // 3. Portfolio Tab
+    else if (tabId === 'portfolio') {
+      if (statsRow) statsRow.classList.add('hidden');
+      if (sidebar) sidebar.classList.add('hidden');
+      if (uploadPanel) uploadPanel.classList.add('hidden');
+      if (portfolioTable) portfolioTable.classList.remove('hidden');
+      if (withdrawPanel) withdrawPanel.classList.add('hidden');
+      if (workspaceLayout) workspaceLayout.classList.add('full-width');
+    }
+    // 4. Earnings Tab
+    else if (tabId === 'earnings') {
+      if (statsRow) statsRow.classList.add('hidden');
+      if (sidebar) sidebar.classList.add('hidden');
+      if (uploadPanel) uploadPanel.classList.add('hidden');
+      if (portfolioTable) portfolioTable.classList.add('hidden');
+      if (withdrawPanel) withdrawPanel.classList.remove('hidden');
+      if (workspaceLayout) workspaceLayout.classList.add('full-width');
+    }
+  }
+
+  renderProfile() {
+    if (!this.currentUser) return;
+
+    const nameEl = document.getElementById('profile-user-name');
+    const phoneEl = document.getElementById('profile-user-phone');
+    const emailEl = document.getElementById('profile-user-email');
+    const walletEl = document.getElementById('profile-user-wallet');
+    const levelEl = document.getElementById('profile-user-level');
+    const switchContainer = document.getElementById('profile-switch-role-container');
+
+    if (nameEl) nameEl.innerText = this.currentUser.name;
+    if (phoneEl) phoneEl.innerHTML = `<i class="fa-solid fa-phone"></i> ${this.currentUser.phone}`;
+    if (emailEl) emailEl.innerText = this.currentUser.email || '未設定';
+    
+    // Wallet / points display based on active role
+    if (walletEl) {
+      if (this.currentUser.role === 'seller') {
+        walletEl.innerHTML = `<span style="color:var(--color-seller); font-size: 20px; font-weight: 800;">${this.currentUser.seller_credits} 積分</span>`;
+      } else {
+        walletEl.innerHTML = `<span style="color:var(--color-creator); font-size: 20px; font-weight: 800;">$${this.currentUser.balance.toFixed(2)} TWD</span>`;
+      }
+    }
+
+    if (levelEl) {
+      levelEl.innerText = `LV.${this.currentUser.level} (${this.currentUser.role === 'creator' ? '創作者' : '帶貨主播'})`;
+    }
+
+    if (switchContainer) {
+      const hasDoubleRoles = this.currentUser.roles && this.currentUser.roles.includes('creator') && this.currentUser.roles.includes('seller');
+      if (hasDoubleRoles) {
+        switchContainer.innerHTML = `
+          <button class="btn btn-outline w-100 text-amber" onclick="app.switchActiveRole()" style="display:flex; align-items:center; justify-content:center; gap:8px;">
+            <i class="fa-solid fa-arrows-rotate"></i> 切換為【${this.currentUser.role === 'creator' ? '帶貨主播' : '創作者'}】身分
+          </button>
+        `;
+      } else {
+        switchContainer.innerHTML = `
+          <div class="text-muted text-center" style="font-size:12px;">您的帳號目前為單一身分，如需雙重身分，可聯繫客服升級。</div>
+        `;
+      }
+    }
   }
 
   recalculateCreatorLevel() {

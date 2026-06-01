@@ -328,8 +328,16 @@
         </div>
       </div>
 
+      <!-- Creator Sub-Navigation Tabs -->
+      <div class="creator-tabs-nav mt-3">
+        <button class="creator-tab-btn active" id="creator-tab-dashboard" onclick="app.switchCreatorTab('dashboard')"><i class="fa-solid fa-chart-simple"></i> 數據總覽</button>
+        <button class="creator-tab-btn" id="creator-tab-upload" onclick="app.switchCreatorTab('upload')"><i class="fa-solid fa-cloud-arrow-up"></i> 上傳素材</button>
+        <button class="creator-tab-btn" id="creator-tab-portfolio" onclick="app.switchCreatorTab('portfolio')"><i class="fa-solid fa-table-list"></i> 我的作品</button>
+        <button class="creator-tab-btn" id="creator-tab-earnings" onclick="app.switchCreatorTab('earnings')"><i class="fa-solid fa-wallet"></i> 收益提取</button>
+      </div>
+
       <!-- Creator Stats Cards -->
-      <div class="stats-row">
+      <div class="stats-row" id="creator-dashboard-stats">
         <div class="card stat-subcard">
           <div class="subcard-title">目前創作者等級</div>
           <div class="level-badge-container">
@@ -370,10 +378,10 @@
       </div>
 
       <!-- Main Uploader and Tutorials Tabs -->
-      <div class="creator-workspace">
+      <div class="creator-workspace" id="creator-workspace-layout">
         <div class="workspace-main">
           <!-- Upload Box -->
-          <div class="card upload-card">
+          <div class="card upload-card" id="creator-upload-panel">
             <div class="card-header-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
             <h3>上傳全新帶貨商品素材</h3>
             <p class="section-desc">請依照要求上傳 1:1 正方形商品照，並在下方上傳 3~5 秒的各分鏡影片。經後台審核後，會同步上架至「帶貨神器」供主播下載。</p>
@@ -588,7 +596,7 @@
         </div>
 
         <!-- Sidebar Tutorials and Rank info -->
-        <aside class="workspace-sidebar">
+        <aside class="workspace-sidebar" id="creator-dashboard-sidebar">
           <!-- Shooting Tutorials -->
           <div class="card tutorial-sidebar-card">
             <h3><i class="fa-solid fa-graduation-cap text-creator"></i> 拍攝實用教學</h3>
@@ -951,6 +959,66 @@
                 <!-- Rendered by JS -->
               </tbody>
             </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. PERSONAL PROFILE VIEW (個人中心 / 我的) -->
+    <section id="view-profile" class="app-view hidden">
+      <div class="view-header">
+        <div class="welcome-box">
+          <span class="user-avatar-tag" style="background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); color: white;"><i class="fa-solid fa-user-gear"></i> 個人中心</span>
+          <div>
+            <h2>會員資料與設定</h2>
+            <p>管理您的登入狀態、帳戶資訊、切換身分及系統同步設定。</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="creator-workspace">
+        <div class="workspace-main" style="grid-column: span 2;">
+          <!-- User Details Card -->
+          <div class="card">
+            <div style="display: flex; align-items: center; gap: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 20px; margin-bottom: 20px;">
+              <div style="width: 64px; height: 64px; background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); color: white; display: flex; align-items: center; justify-content: center; font-size: 28px; border-radius: 50%; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);">
+                <i class="fa-solid fa-user"></i>
+              </div>
+              <div>
+                <h3 id="profile-user-name" style="margin: 0; font-size: 20px; font-weight: 800; color: var(--border-dark);">會員姓名</h3>
+                <p id="profile-user-phone" style="margin: 4px 0 0 0; font-size: 13px; color: var(--text-muted); font-weight: 600;"><i class="fa-solid fa-phone"></i> 電話號碼</p>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px;">
+              <div class="card stat-subcard" style="margin: 0; padding: 16px; border: 1px solid var(--border-color); background: var(--bg-primary);">
+                <div class="subcard-title" style="font-size: 11px;">電子郵件信箱</div>
+                <div id="profile-user-email" style="font-size: 14px; font-weight: 700; color: var(--border-dark); margin-top: 8px; word-break: break-all;">user@example.com</div>
+              </div>
+              <div class="card stat-subcard" style="margin: 0; padding: 16px; border: 1px solid var(--border-color); background: var(--bg-primary);">
+                <div class="subcard-title" style="font-size: 11px;">當前身分錢包</div>
+                <div id="profile-user-wallet" style="font-size: 16px; font-weight: 800; color: var(--color-seller); margin-top: 8px;">0.00</div>
+              </div>
+              <div class="card stat-subcard" style="margin: 0; padding: 16px; border: 1px solid var(--border-color); background: var(--bg-primary);">
+                <div class="subcard-title" style="font-size: 11px;">創作者等級</div>
+                <div id="profile-user-level" style="font-size: 15px; font-weight: 700; color: var(--color-creator); margin-top: 8px;">LV.1</div>
+              </div>
+            </div>
+
+            <!-- Identity Switching Actions -->
+            <div style="background: var(--bg-secondary); border-radius: var(--radius-md); padding: 20px; border: 1px dashed var(--border-color); margin-bottom: 24px;">
+              <h4 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 800; color: var(--border-dark);"><i class="fa-solid fa-arrows-rotate text-amber"></i> 身分角色快速切換</h4>
+              <p style="margin: 0 0 16px 0; font-size: 12px; color: var(--text-muted); line-height: 1.5;">如果您同時具備「創作者」與「帶貨主播」身分，可以在此快速切換您的主頁板塊顯示：</p>
+              
+              <div id="profile-switch-role-container">
+                <!-- Dynamically filled by JS -->
+              </div>
+            </div>
+
+            <!-- Log out Action -->
+            <div class="submit-wrap" style="margin-top: 20px;">
+              <button class="btn btn-danger btn-lg w-100" onclick="app.logout()" style="background: linear-gradient(135deg, var(--color-danger) 0%, #b91c1c 100%); border: none; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.25); color: white;"><i class="fa-solid fa-right-from-bracket"></i> 安全登出此帳號</button>
+            </div>
           </div>
         </div>
       </div>

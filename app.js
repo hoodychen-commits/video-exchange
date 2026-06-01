@@ -627,129 +627,25 @@ class AppEngine {
   // 2. SECURITY ENGINE (Anti-Screen Record & Protection)
   // --------------------------------------------------
   bindSecurityEvents() {
-    // 1. Block right click context menu
+    // 1. Block right click context menu (ONLY keeping this security feature as requested)
     document.addEventListener('contextmenu', (e) => {
       if (this.currentUser) {
         e.preventDefault();
-        alert("🛡️ 安全防護提示：本平台已啟用原創素材防拷保護，禁止右鍵另存。");
       }
-    });
-
-    // 2. Block copy
-    document.addEventListener('copy', (e) => {
-      if (this.currentUser) {
-        e.preventDefault();
-        alert("🛡️ 安全防護提示：本平台禁止複製網頁素材內容。");
-      }
-    });
-
-    // 3. Monitor key down events for PrintScreen, screenshot shortcuts or DevTools (F12, Ctrl+Shift+I)
-    document.addEventListener('keydown', (e) => {
-      if (!this.currentUser) return;
-      
-      // PrintScreen Key
-      if (e.key === 'PrintScreen') {
-        e.preventDefault();
-        this.triggerGuardOverlay();
-      }
-
-      // F12 or Ctrl+Shift+I (Mac: Cmd+Opt+I)
-      if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && e.key === 'I') || (e.metaKey && e.altKey && e.key === 'i')) {
-        e.preventDefault();
-        this.triggerGuardOverlay();
-        alert("🛡️ 安全提示：偵測到嘗試開啟開發者工具。影片內容已被安全防護模糊。");
-      }
-    });
-
-    // 4. Focus Loss & Tab switching detection (Page Visibility API)
-    document.addEventListener('visibilitychange', () => {
-      if (this.currentUser && document.hidden) {
-        this.triggerGuardOverlay();
-      }
-    });
-
-    window.addEventListener('blur', () => {
-      if (this.currentUser) {
-        this.triggerGuardOverlay();
-      }
-    });
-
-    window.addEventListener('focus', () => {
-      // Keep guard if screen recording is suspected, or let users manually dismiss
     });
   }
 
   triggerGuardOverlay() {
-    const overlay = document.getElementById('screen-guard-overlay');
-    if (overlay) {
-      overlay.classList.remove('hidden');
-    }
-    // Blur active video players
-    const videos = document.querySelectorAll('video');
-    videos.forEach(v => {
-      v.pause();
-      v.classList.add('private-blur');
-    });
+    // Removed to allow seamless multi-tasking without screen blur
   }
 
   dismissGuard() {
-    const overlay = document.getElementById('screen-guard-overlay');
-    if (overlay) {
-      overlay.classList.add('hidden');
-    }
-    const videos = document.querySelectorAll('video');
-    videos.forEach(v => {
-      v.classList.remove('private-blur');
-    });
+    // Removed
   }
 
-  // Floating Watermark Generator (Name + Phone digits)
+  // Floating Watermark Generator (Disabled to keep clean UI layout)
   startFloatingWatermark() {
-    if (this.watermarkInterval) {
-      clearInterval(this.watermarkInterval);
-    }
-
-    const container = document.getElementById('watermark-container');
-    if (!container) return;
-    
-    container.innerHTML = '';
-    if (!this.currentUser) return;
-
-    const phoneStr = this.currentUser.phone;
-    const maskedPhone = phoneStr.substring(0, 4) + "***" + phoneStr.substring(phoneStr.length - 4);
-    const watermarkText = `${this.currentUser.name} (${maskedPhone}) 原創素材防盜版`;
-
-    const createWatermarkNode = () => {
-      const el = document.createElement('div');
-      el.className = 'floating-watermark-text no-select';
-      el.innerText = watermarkText;
-      
-      // Random coordinates
-      const x = Math.random() * (window.innerWidth - 200);
-      const y = Math.random() * (window.innerHeight - 50);
-      
-      el.style.left = `${x}px`;
-      el.style.top = `${y}px`;
-      
-      container.appendChild(el);
-
-      // Fade out and remove
-      setTimeout(() => {
-        el.style.opacity = '0';
-        setTimeout(() => el.remove(), 2000);
-      }, 4000);
-    };
-
-    // Spawn initial watermarks
-    for (let i = 0; i < 4; i++) {
-      setTimeout(createWatermarkNode, i * 1000);
-    }
-
-    this.watermarkInterval = setInterval(() => {
-      if (this.currentUser) {
-        createWatermarkNode();
-      }
-    }, 2500);
+    // Removed to keep clean UI layout
   }
 
   // --------------------------------------------------
@@ -1875,7 +1771,6 @@ class AppEngine {
     const playerBox = document.getElementById('detail-video-player-box');
     const photoEl = document.getElementById('modal-product-photo');
     const videoPlayer = document.getElementById('modal-video-player');
-    const wmkOverlay = document.getElementById('video-watermark-overlay');
 
     // Remove active class from all rows
     const rows = document.querySelectorAll('.scene-select-row');
@@ -1889,12 +1784,6 @@ class AppEngine {
 
     videoPlayer.src = videoUrl;
     videoPlayer.play();
-
-    // Custom overlay identity text on player
-    if (this.currentUser) {
-      const phoneStr = this.currentUser.phone;
-      wmkOverlay.innerText = `${this.currentUser.name} (${phoneStr.slice(0,4)}***${phoneStr.slice(-4)}) 安全防護中`;
-    }
   }
 
   // Point deduction implementation (charges 5 points per item download)

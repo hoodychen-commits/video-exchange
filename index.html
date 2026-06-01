@@ -18,19 +18,7 @@
 </head>
 <body>
 
-  <!-- Screen Recording / Focus Blur Overlay -->
-  <div id="screen-guard-overlay" class="screen-guard-overlay hidden">
-    <div class="guard-content">
-      <i class="fa-solid fa-shield-halved guard-icon"></i>
-      <h3>安全防護已啟動</h3>
-      <p>偵測到視窗切換、錄影工具啟動或擷圖行為。</p>
-      <p class="sub">為保障創作者版權，影片內容已暫時進行隱私模糊保護。</p>
-      <button class="btn btn-primary" onclick="app.dismissGuard()">恢復觀看</button>
-    </div>
-  </div>
-
-  <!-- Dynamic Security Floating Watermark Canvas -->
-  <div id="watermark-container" class="watermark-container"></div>
+  <!-- Screen guards and watermarks removed as requested -->
 
   <!-- Supabase Cloud Sync Connection Banner -->
   <div id="cloud-sync-banner" class="cloud-sync-banner cloud-warning">
@@ -1114,9 +1102,7 @@
             </div>
             
             <div class="active-video-player-container hidden" id="detail-video-player-box">
-              <div class="anti-recording-tag"><i class="fa-solid fa-shield"></i> 浮水印已嵌入 & 防錄製保護中</div>
               <video id="modal-video-player" controls controlslist="nodownload" oncontextmenu="return false;"></video>
-              <div class="watermark-layer-on-video" id="video-watermark-overlay">您的姓名 0912***3456 防盜拷</div>
             </div>
           </div>
 
@@ -1193,7 +1179,7 @@
   <!-- Footer -->
   <footer class="app-footer text-center">
     <div class="container">
-      <p>&copy; 2026 極致素材交易所 版權所有。本平台已啟用安全防護浮水印與視窗反截圖機制。</p>
+      <p>&copy; 2026 極致素材交易所 版權所有。本平台已啟用防盜拷保護機制。</p>
       <p class="footer-desc">本網站已完美相容於手機 Safari、Chrome 及各類行動瀏覽器，支援同步登入資訊與即時雲端備份。</p>
     </div>
   </footer>

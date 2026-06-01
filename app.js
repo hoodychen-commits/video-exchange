@@ -360,11 +360,10 @@ class AppEngine {
             created_at: new Date().toISOString()
           };
           const { error: insErr } = await this.supabase.from('users').insert([defaultAdmin]);
-          if (!insErr) {
-            this.users.push(defaultAdmin);
-          } else {
-            console.error("Auto-creating admin failed:", insErr.message);
+          if (insErr) {
+            console.warn("Auto-creating admin in cloud failed, using local in-memory fallback:", insErr.message);
           }
+          this.users.push(defaultAdmin); // Always push to local array so the admin can log in successfully
         }
 
         // Load products from Supabase

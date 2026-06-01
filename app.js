@@ -1969,6 +1969,17 @@ class AppEngine {
       video.playsInline = true;
       video.crossOrigin = "anonymous"; // Avoid canvas tainted security error
       
+      // CRITICAL: Append video to DOM so the browser triggers hardware decoder at full frame rate!
+      video.style.position = 'fixed';
+      video.style.top = '0';
+      video.style.left = '0';
+      video.style.width = '1px';
+      video.style.height = '1px';
+      video.style.opacity = '0.01';
+      video.style.pointerEvents = 'none';
+      video.style.zIndex = '-9999';
+      document.body.appendChild(video);
+      
       // We must wait for the first video to load metadata to get dimensions
       statusText.innerText = "正在分析分鏡影片規格...";
       video.src = videoUrls[0];
@@ -2093,6 +2104,7 @@ class AppEngine {
     } finally {
       clearInterval(statusTimer);
       if (progressOverlay) progressOverlay.remove();
+      if (video) video.remove();
     }
   }
 
@@ -2185,6 +2197,17 @@ class AppEngine {
       video.playsInline = true;
       video.crossOrigin = "anonymous";
       
+      // CRITICAL: Append video to DOM so the browser triggers hardware decoder at full frame rate!
+      video.style.position = 'fixed';
+      video.style.top = '0';
+      video.style.left = '0';
+      video.style.width = '1px';
+      video.style.height = '1px';
+      video.style.opacity = '0.01';
+      video.style.pointerEvents = 'none';
+      video.style.zIndex = '-9999';
+      document.body.appendChild(video);
+      
       // We must wait for the first video to load metadata to get dimensions
       statusText.innerText = "正在分析分鏡影片規格...";
       video.src = videoUrls[0];
@@ -2244,6 +2267,25 @@ class AppEngine {
         // Start video playback
         video.playbackRate = playbackRate;
         video.play();
+
+        // Play AI Voiceover in Traditional Chinese
+        try {
+          window.speechSynthesis.cancel(); // Cancel any active speaking
+          const cleanText = scripts[i].replace(/🔥 |✨ |💎 |⚡ |👇 /g, "").replace(/【|】/g, "");
+          const utterance = new SpeechSynthesisUtterance(cleanText);
+          const voices = window.speechSynthesis.getVoices();
+          const twVoice = voices.find(v => v.lang.includes('TW') || v.lang.includes('zh-TW'));
+          if (twVoice) {
+            utterance.voice = twVoice;
+          } else {
+            const zhVoice = voices.find(v => v.lang.includes('ZH') || v.lang.includes('zh'));
+            if (zhVoice) utterance.voice = zhVoice;
+          }
+          utterance.rate = 1.05; // Slightly faster speaking rate for dynamic ads
+          window.speechSynthesis.speak(utterance);
+        } catch (ttsErr) {
+          console.warn("Speech synthesis error:", ttsErr);
+        }
 
         const estTimeRemaining = totalVideos * sceneDuration - i * sceneDuration;
         estimatedTime.innerText = `預估剩餘時間: ${estTimeRemaining} 秒`;
@@ -2355,6 +2397,10 @@ class AppEngine {
     } finally {
       clearInterval(statusTimer);
       if (progressOverlay) progressOverlay.remove();
+      if (video) video.remove();
+      try {
+        window.speechSynthesis.cancel(); // Stop speaking once done or cancelled
+      } catch (e) {}
     }
   }
 

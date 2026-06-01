@@ -1002,10 +1002,10 @@
           </div>
           
           <div class="form-group">
-            <label class="required-lbl">我要成為哪種會員角色？</label>
+            <label class="required-lbl">我要成為哪種會員角色？(可雙重勾選)</label>
             <div class="role-selector-radios">
               <label class="role-radio-label">
-                <input type="radio" name="reg-role" value="creator" checked required>
+                <input type="checkbox" name="reg-role-box" value="creator" checked id="reg-chk-creator">
                 <div class="role-radio-box creator-border">
                   <i class="fa-solid fa-video"></i>
                   <span><b>創作者</b></span>
@@ -1013,7 +1013,7 @@
                 </div>
               </label>
               <label class="role-radio-label">
-                <input type="radio" name="reg-role" value="seller" required>
+                <input type="checkbox" name="reg-role-box" value="seller" id="reg-chk-seller">
                 <div class="role-radio-box seller-border">
                   <i class="fa-solid fa-wand-magic-sparkles"></i>
                   <span><b>帶貨主播</b></span>

@@ -78,6 +78,21 @@ class AppEngine {
 
     if (localUsers) {
       this.users = JSON.parse(localUsers);
+      // Migration Helper: convert old schema users to multi-role schema
+      this.users.forEach(u => {
+        if (!u.roles) {
+          u.roles = [u.role || 'creator'];
+        }
+        if (!u.role) {
+          u.role = u.roles[0];
+        }
+        if (u.seller_credits === undefined) {
+          u.seller_credits = u.role === 'seller' ? (u.balance || 0) : 0;
+          if (u.role === 'seller') {
+            u.balance = 0; // Separate cash balance from points
+          }
+        }
+      });
     } else {
       // Default Mock Users
       this.users = [
@@ -86,9 +101,11 @@ class AppEngine {
           name: "陳阿明",
           phone: "0912345678",
           email: "amin@example.com",
-          role: "creator",
+          roles: ["creator", "seller"], // Dual Roles!
+          role: "creator", // Current Active Role
           level: 3,
-          balance: 1250,
+          balance: 1250, // Creator Earnings (TWD Cash)
+          seller_credits: 2000, // Seller Point Credits
           total_earnings: 1250,
           created_at: new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString(),
           bank_info: {
@@ -103,9 +120,11 @@ class AppEngine {
           name: "林小花",
           phone: "0987654321",
           email: "flower@example.com",
+          roles: ["seller"],
           role: "seller",
           level: 1,
-          balance: 4500, // Seller starts with credits
+          balance: 0,
+          seller_credits: 4500, // Points
           total_earnings: 0,
           created_at: new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString()
         },
@@ -114,9 +133,11 @@ class AppEngine {
           name: "超級管理員",
           phone: "0900000000",
           email: "admin@material.exchange",
+          roles: ["admin"],
           role: "admin",
           level: 10,
           balance: 99999,
+          seller_credits: 99999,
           total_earnings: 99999,
           created_at: new Date().toISOString()
         }
@@ -420,10 +441,13 @@ class AppEngine {
     `;
 
     if (this.currentUser) {
+      const hasDoubleRoles = this.currentUser.roles && this.currentUser.roles.includes('creator') && this.currentUser.roles.includes('seller');
+
       // logged in menu logic
       if (this.currentUser.role === 'creator') {
         desktopHtml += `
           <a class="nav-link ${this.activeView === 'creator' ? 'active' : ''}" onclick="app.navigate('creator')">創作者中心</a>
+          ${hasDoubleRoles ? `<a class="nav-link text-amber" onclick="app.switchActiveRole()"><i class="fa-solid fa-arrows-rotate"></i> 切換為帶貨者</a>` : ''}
           <a class="nav-link" href="https://line.me/R/ti/p/@yourlineid" target="_blank">LINE@ 客服</a>
         `;
         mobileHtml += `
@@ -431,14 +455,20 @@ class AppEngine {
             <i class="fa-solid fa-camera-retro"></i>
             <span>創作者中心</span>
           </div>
+          ${hasDoubleRoles ? `
+          <div class="mobile-nav-item" onclick="app.switchActiveRole()">
+            <i class="fa-solid fa-arrows-rotate" style="color:var(--color-accent);"></i>
+            <span>切換身分</span>
+          </div>` : ''}
           <a class="mobile-nav-item" href="https://line.me/R/ti/p/@yourlineid" target="_blank" style="text-decoration:none;">
             <i class="fa-brands fa-line" style="color:#06c755;"></i>
             <span>LINE客服</span>
-          </div>
+          </a>
         `;
       } else if (this.currentUser.role === 'seller') {
         desktopHtml += `
           <a class="nav-link ${this.activeView === 'seller' ? 'active' : ''}" onclick="app.navigate('seller')">帶貨神器</a>
+          ${hasDoubleRoles ? `<a class="nav-link text-amber" onclick="app.switchActiveRole()"><i class="fa-solid fa-arrows-rotate"></i> 切換為創作者</a>` : ''}
           <a class="nav-link" onclick="app.openRechargeModal()">積分儲值</a>
           <a class="nav-link" onclick="app.scrollAndFocus('seller-tutorial-section')">帶貨教學</a>
         `;
@@ -447,6 +477,11 @@ class AppEngine {
             <i class="fa-solid fa-wand-magic-sparkles"></i>
             <span>帶貨神器</span>
           </div>
+          ${hasDoubleRoles ? `
+          <div class="mobile-nav-item" onclick="app.switchActiveRole()">
+            <i class="fa-solid fa-arrows-rotate" style="color:var(--color-accent);"></i>
+            <span>切換身分</span>
+          </div>` : ''}
           <div class="mobile-nav-item" onclick="app.openRechargeModal()">
             <i class="fa-solid fa-wallet"></i>
             <span>積分儲值</span>
@@ -482,13 +517,15 @@ class AppEngine {
         </div>
       `;
 
-      // Header User Pill
-      let displayBal = this.currentUser.role === 'creator' ? `$${this.currentUser.balance.toFixed(2)}` : `${this.currentUser.balance} 積分`;
+      // Header User Pill (Checks active wallet)
+      let displayBal = this.currentUser.role === 'creator' ? `$${this.currentUser.balance.toFixed(2)}` : `${this.currentUser.seller_credits} 積分`;
+      let switchBtnHtml = hasDoubleRoles ? `<button class="btn btn-outline btn-sm text-amber" onclick="app.switchActiveRole()"><i class="fa-solid fa-arrows-rotate"></i> 切換身分</button>` : '';
       userStatus.innerHTML = `
         <div class="user-badge-header">
           <i class="fa-solid fa-user"></i>
           <span><b>${this.currentUser.name}</b> (${displayBal})</span>
         </div>
+        ${switchBtnHtml}
         <button class="btn btn-outline btn-sm" onclick="app.logout()"><i class="fa-solid fa-right-from-bracket"></i> 登出</button>
       `;
 
@@ -529,6 +566,29 @@ class AppEngine {
       if (greet) greet.innerText = `您好，帶貨主播 ${this.currentUser.name}！`;
       this.renderSellerStats();
     }
+  }
+
+  switchActiveRole() {
+    if (!this.currentUser || !this.currentUser.roles || this.currentUser.roles.length < 2) {
+      alert("您目前僅具備單一角色身分，無法進行切換。");
+      return;
+    }
+
+    const nextRole = this.currentUser.role === 'creator' ? 'seller' : 'creator';
+    this.currentUser.role = nextRole;
+
+    // Save in user list
+    const userIdx = this.users.findIndex(u => u.id === this.currentUser.id);
+    if (userIdx !== -1) {
+      this.users[userIdx] = this.currentUser;
+      this.saveUsers();
+    }
+
+    this.triggerCloudSyncToast(`已切換為【${nextRole === 'creator' ? '創作者' : '帶貨主播'}】身分`);
+    alert(`🔄 身份切換成功！您現在已切換為【${nextRole === 'creator' ? '創作者' : '帶貨主播'}】。`);
+
+    // Redirect to respective module dashboard
+    this.navigate(nextRole);
   }
 
   // --------------------------------------------------
@@ -572,11 +632,19 @@ class AppEngine {
     const name = document.getElementById('reg-name').value.trim();
     const phone = document.getElementById('reg-phone').value.trim();
     const email = document.getElementById('reg-email').value.trim();
-    const role = document.querySelector('input[name="reg-role"]:checked').value;
     const agreement = document.getElementById('reg-agreement').checked;
+
+    // Read checkboxes instead of radio
+    const roleBoxes = document.querySelectorAll('input[name="reg-role-box"]:checked');
+    const roles = Array.from(roleBoxes).map(cb => cb.value);
 
     if (!name || !phone || !email) {
       alert("請填寫所有必要欄位。");
+      return;
+    }
+
+    if (roles.length === 0) {
+      alert("請至少選擇一種會員角色（創作者 或 帶貨主播）進行註冊！");
       return;
     }
 
@@ -593,14 +661,18 @@ class AppEngine {
       return;
     }
 
+    const defaultRole = roles[0]; // Set first selected role as default active role
+
     const newUser = {
       id: "usr_" + Math.random().toString(36).substring(2, 11),
       name,
       phone,
       email,
-      role,
+      roles,
+      role: defaultRole, // Current active role
       level: 1,
-      balance: role === 'seller' ? 0 : 0.00, // Sellers start with 0 credits, Creators start with 0 TWD
+      balance: 0.00,       // Creator Cash Earnings (TWD)
+      seller_credits: 0,   // Seller points credits
       total_earnings: 0.00,
       created_at: new Date().toISOString()
     };
@@ -614,12 +686,8 @@ class AppEngine {
     this.closeAuthModal();
     this.renderNavigation();
     
-    // Redirect to respective module
-    if (role === 'creator') {
-      this.navigate('creator');
-    } else {
-      this.navigate('seller');
-    }
+    // Redirect to active role dashboard
+    this.navigate(defaultRole);
     this.startFloatingWatermark();
   }
 
@@ -639,6 +707,20 @@ class AppEngine {
       return;
     }
 
+    // Ensure roles array and active role are initialized
+    if (!user.roles) {
+      user.roles = [user.role || 'creator'];
+    }
+    if (!user.role) {
+      user.role = user.roles[0];
+    }
+    if (user.seller_credits === undefined) {
+      user.seller_credits = user.role === 'seller' ? (user.balance || 0) : 0;
+      if (user.role === 'seller') {
+        user.balance = 0;
+      }
+    }
+
     this.currentUser = user;
     localStorage.setItem('app_session', user.id);
 
@@ -646,14 +728,8 @@ class AppEngine {
     this.closeAuthModal();
     this.renderNavigation();
 
-    // Redirect to respective module
-    if (user.role === 'creator') {
-      this.navigate('creator');
-    } else if (user.role === 'seller') {
-      this.navigate('seller');
-    } else if (user.role === 'admin') {
-      this.navigate('admin');
-    }
+    // Redirect to active role dashboard
+    this.navigate(user.role);
     this.startFloatingWatermark();
   }
 
@@ -1096,7 +1172,7 @@ class AppEngine {
     if (!this.currentUser || this.currentUser.role !== 'seller') return;
 
     const credEl = document.getElementById('seller-credits');
-    if (credEl) credEl.innerText = this.currentUser.balance;
+    if (credEl) credEl.innerText = this.currentUser.seller_credits;
   }
 
   renderProducts() {
@@ -1225,7 +1301,7 @@ class AppEngine {
 
     const confirmPay = confirm(`【模擬金流付費】確認是否儲值 TWD $${amount} 元以兌換 ${amount + bonus} 點積分？`);
     if (confirmPay) {
-      this.currentUser.balance += (amount + bonus);
+      this.currentUser.seller_credits += (amount + bonus);
       
       const userIdx = this.users.findIndex(u => u.id === this.currentUser.id);
       if (userIdx !== -1) {
@@ -1234,7 +1310,7 @@ class AppEngine {
       }
 
       this.triggerCloudSyncToast("儲值成功！積分點數已實時到帳！");
-      alert(`🎉 儲值完成！成功到帳 ${amount + bonus} 點積分 (含額外贈送 $${bonus} 元點數)！現有積分：${this.currentUser.balance} 點。`);
+      alert(`🎉 儲值完成！成功到帳 ${amount + bonus} 點積分 (含額外贈送 $${bonus} 元點數)！現有積分：${this.currentUser.seller_credits} 點。`);
       
       this.closeRechargeModal();
       this.renderSellerStats();
@@ -1369,14 +1445,14 @@ class AppEngine {
       return false;
     }
 
-    if (this.currentUser.balance < 5) {
+    if (this.currentUser.seller_credits < 5) {
       alert("📥 下載失敗：您的積分點數餘額不足！請先儲存至少 5 點積分。");
       this.closeProductDetailModal();
       this.openRechargeModal();
       return false;
     }
 
-    this.currentUser.balance -= 5;
+    this.currentUser.seller_credits -= 5;
     
     // Save seller credits
     const sellerIdx = this.users.findIndex(u => u.id === this.currentUser.id);
@@ -1587,15 +1663,34 @@ class AppEngine {
       this.users.forEach(u => {
         const row = document.createElement('tr');
         
-        let roleBadge = `<span class="badge bg-creator"><i class="fa-solid fa-video"></i> 創作者</span>`;
-        if (u.role === 'seller') {
-          roleBadge = `<span class="badge bg-seller"><i class="fa-solid fa-wand-magic-sparkles"></i> 帶貨主播</span>`;
-        } else if (u.role === 'admin') {
-          roleBadge = `<span class="badge admin-badge"><i class="fa-solid fa-user-gear"></i> 管理員</span>`;
+        let roleBadge = '';
+        if (u.roles) {
+          if (u.roles.includes('admin')) {
+            roleBadge = `<span class="badge admin-badge"><i class="fa-solid fa-user-gear"></i> 管理員</span>`;
+          } else {
+            if (u.roles.includes('creator')) {
+              roleBadge += `<span class="badge bg-creator" style="margin-right:4px;"><i class="fa-solid fa-video"></i> 創作者</span>`;
+            }
+            if (u.roles.includes('seller')) {
+              roleBadge += `<span class="badge bg-seller"><i class="fa-solid fa-wand-magic-sparkles"></i> 帶貨主播</span>`;
+            }
+          }
+        } else {
+          roleBadge = u.role === 'seller' ? `<span class="badge bg-seller"><i class="fa-solid fa-wand-magic-sparkles"></i> 帶貨主播</span>` : `<span class="badge bg-creator"><i class="fa-solid fa-video"></i> 創作者</span>`;
         }
 
-        let balLabel = u.role === 'creator' ? `TWD $${u.balance.toFixed(2)}` : `${u.balance} 積分`;
-        let lvlLabel = u.role === 'creator' ? `LV.${u.level} 分成` : `LV.${u.level} 一般`;
+        let balLabel = '';
+        if (u.roles && u.roles.includes('creator')) {
+          balLabel += `收益: $${u.balance.toFixed(2)} TWD<br>`;
+        }
+        if (u.roles && u.roles.includes('seller')) {
+          balLabel += `積分: ${u.seller_credits} 點`;
+        }
+        if (!balLabel) {
+          balLabel = u.role === 'seller' ? `${u.seller_credits} 積分` : `TWD $${u.balance.toFixed(2)}`;
+        }
+
+        let lvlLabel = u.roles && u.roles.includes('creator') ? `LV.${u.level} 分成` : `LV.${u.level} 一般`;
 
         row.innerHTML = `
           <td><b>${u.name}</b></td>
@@ -1692,7 +1787,12 @@ class AppEngine {
     const u = this.users.find(x => x.id === userId);
     if (!u) return;
 
-    u.balance += change;
+    // If they have seller role, recharge points. Otherwise recharge cash.
+    if (u.roles && u.roles.includes('seller')) {
+      u.seller_credits += change;
+    } else {
+      u.balance += change;
+    }
     this.saveUsers();
     
     this.triggerCloudSyncToast("使用者帳戶餘額已手動變更完成！");

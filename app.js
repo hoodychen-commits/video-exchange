@@ -2095,6 +2095,268 @@ class AppEngine {
     }
   }
 
+  async generate15sAdVideo() {
+    const checkboxes = document.querySelectorAll('input[name="scene-chk"]');
+    if (checkboxes.length === 0) {
+      alert("本商品無可用影片素材，無法進行合成！");
+      return;
+    }
+
+    // Deduct 5 points
+    if (!this.deductCredits()) return;
+
+    const allUrls = Array.from(checkboxes).map(chk => chk.value);
+    
+    // Pick 5 scenes (if fewer than 5, we repeat/cycle through them to make exactly 5 scenes)
+    const selectedUrls = [];
+    const shuffled = allUrls.sort(() => 0.5 - Math.random());
+    for (let i = 0; i < 5; i++) {
+      selectedUrls.push(shuffled[i % shuffled.length]);
+    }
+
+    const productName = document.getElementById('modal-product-name')?.innerText || '極致熱銷好物';
+
+    // Generate high-converting e-commerce copy in Traditional Chinese
+    const scripts = [
+      `🔥 全網爆紅！你還在找這款超高人氣的【${productName}】嗎？`,
+      `✨ 親自實測！這細節跟產品質感簡直讓人太驚艷了！`,
+      `💎 無論是實用性還是超高顏值，用過就真的回不去了！`,
+      `⚡ 廠商今天限量特惠，買到就是賺到，庫存快被搶光！`,
+      `👇 趕緊點擊下方連結，手刀搶購【${productName}】吧！`
+    ];
+
+    alert(`🎉 成功扣除 5 積分！系統即將為您生成 15 秒「黃金口播繁中字幕廣告片」！\n已為您規劃 ${selectedUrls.length} 個隨機分鏡（每段 3 秒，共 15 秒）並自動燒錄繁中廣告字幕。\n合成完畢後將自動下載檔案。`);
+
+    await this.compile15sAdVideo(selectedUrls, productName, scripts);
+    
+    this.closeProductDetailModal();
+  }
+
+  async compile15sAdVideo(videoUrls, productName, scripts) {
+    // Generate custom processing modal dynamically
+    const progressOverlay = document.createElement('div');
+    progressOverlay.className = 'screen-guard-overlay'; // Reuse nice guard styling
+    progressOverlay.id = 'video-merge-overlay';
+    progressOverlay.style.zIndex = '10001';
+    progressOverlay.innerHTML = `
+      <div class="guard-content" style="max-width: 460px; background: rgba(255, 255, 255, 0.95); padding: 32px; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); backdrop-filter: blur(20px);">
+        <div style="font-size: 50px; margin-bottom: 16px;">📣</div>
+        <h3 style="margin: 0 0 8px 0; font-size: 20px; font-weight: 800; color: #7c3aed;">AI 15秒口播字幕片生成中</h3>
+        <p style="margin: 0 0 20px 0; font-size: 13px; color: #64748b; line-height: 1.6;" id="merge-status-text">正在初始化廣告引擎，載入分鏡素材影片...</p>
+        
+        <!-- Progress Bar -->
+        <div style="width: 100%; background: #e2e8f0; height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 12px; position: relative;">
+          <div id="merge-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%); transition: width 0.3s ease;"></div>
+        </div>
+        <div style="display: flex; justify-content: space-between; font-size: 11px; color: #94a3b8; font-weight: 600; width: 100%;">
+          <span id="merge-progress-percent">0%</span>
+          <span id="merge-estimated-time">預估剩餘時間: 15 秒</span>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(progressOverlay);
+
+    const statusText = document.getElementById('merge-status-text');
+    const progressBar = document.getElementById('merge-progress-bar');
+    const progressPercent = document.getElementById('merge-progress-percent');
+    const estimatedTime = document.getElementById('merge-estimated-time');
+
+    // Status updates
+    const statuses = [
+      "正在讀取影片並初始化 9:16 直式規格...",
+      "正在啟動離屏畫布渲染及字幕燒錄引擎...",
+      "正在為您拼接無縫 15 秒口播素材影格...",
+      "正在即時封裝為高品質 MP4/WebM 格式...",
+      "即將完成，準備匯出 15 秒黃金廣告影片..."
+    ];
+    let statusIdx = 0;
+    const statusTimer = setInterval(() => {
+      if (statusIdx < statuses.length - 1) {
+        statusIdx++;
+        statusText.innerText = statuses[statusIdx];
+      }
+    }, 2500);
+
+    try {
+      // Setup offscreen video and canvas elements
+      const video = document.createElement('video');
+      video.muted = true;
+      video.playsInline = true;
+      video.crossOrigin = "anonymous";
+      
+      // We must wait for the first video to load metadata to get dimensions
+      statusText.innerText = "正在分析分鏡影片規格...";
+      video.src = videoUrls[0];
+      await new Promise((resolve, reject) => {
+        video.onloadedmetadata = resolve;
+        video.onerror = () => reject(new Error("無法載入影片素材規格"));
+      });
+
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 720;
+      canvas.height = video.videoHeight || 1280;
+      const ctx = canvas.getContext('2d');
+
+      // MediaRecorder setup
+      let mimeType = 'video/webm;codecs=vp9';
+      if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1')) {
+        mimeType = 'video/mp4;codecs=avc1';
+      } else if (MediaRecorder.isTypeSupported('video/mp4')) {
+        mimeType = 'video/mp4';
+      } else if (MediaRecorder.isTypeSupported('video/webm;codecs=h264')) {
+        mimeType = 'video/webm;codecs=h264';
+      } else if (MediaRecorder.isTypeSupported('video/webm')) {
+        mimeType = 'video/webm';
+      }
+
+      const recordedChunks = [];
+      const fps = 30;
+      const stream = canvas.captureStream(fps);
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          recordedChunks.push(e.data);
+        }
+      };
+
+      let recorderPromise = new Promise((resolve) => {
+        mediaRecorder.onstop = resolve;
+      });
+
+      mediaRecorder.start();
+
+      const totalVideos = 5; // Fixed 5 scenes, each plays 3 seconds = 15 seconds
+      const sceneDuration = 3; // 3 seconds per scene
+      const playbackRate = 1.0; // Play at normal speed to avoid any canvas rendering stutters for text
+
+      for (let i = 0; i < totalVideos; i++) {
+        const url = videoUrls[i];
+        statusText.innerText = `正在合成第 ${i + 1}/${totalVideos} 個 3秒分鏡並燒錄字幕...`;
+        
+        video.src = url;
+        await new Promise((resolve, reject) => {
+          video.oncanplaythrough = resolve;
+          video.onerror = () => reject(new Error(`第 ${i + 1} 個分鏡影片載入失敗`));
+        });
+
+        // Start video playback
+        video.playbackRate = playbackRate;
+        video.play();
+
+        const estTimeRemaining = totalVideos * sceneDuration - i * sceneDuration;
+        estimatedTime.innerText = `預估剩餘時間: ${estTimeRemaining} 秒`;
+
+        // Render loop for exactly 3 seconds
+        await new Promise((resolve) => {
+          const startTime = Date.now();
+          const targetDurationMs = sceneDuration * 1000;
+
+          function renderFrame() {
+            const elapsed = Date.now() - startTime;
+            if (elapsed >= targetDurationMs || video.ended) {
+              video.pause();
+              resolve();
+              return;
+            }
+
+            // Loop video if it's shorter than 3 seconds
+            if (video.ended) {
+              video.currentTime = 0;
+              video.play();
+            }
+
+            // 1. Draw video frame to canvas
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // 2. Draw styled subtitles (Traditional Chinese)
+            const subtitleText = scripts[i];
+            ctx.save();
+            ctx.shadowColor = "rgba(0, 0, 0, 0.85)";
+            ctx.shadowBlur = 6;
+            ctx.shadowOffsetX = 2;
+            ctx.shadowOffsetY = 2;
+            
+            // Responsive text style
+            const fontSize = Math.max(18, Math.round(canvas.width * 0.038));
+            ctx.font = `bold ${fontSize}px 'Noto Sans TC', sans-serif`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            
+            const textX = canvas.width / 2;
+            const textY = canvas.height - Math.round(canvas.height * 0.12);
+            
+            // 2.1 Draw thick black outline
+            ctx.strokeStyle = "#000000";
+            ctx.lineWidth = Math.max(4, Math.round(fontSize * 0.15));
+            ctx.strokeText(subtitleText, textX, textY);
+            
+            // 2.2 Draw high-contrast white fill
+            ctx.fillStyle = "#ffffff";
+            ctx.fillText(subtitleText, textX, textY);
+            ctx.restore();
+
+            // Progress update
+            const totalElapsed = i * sceneDuration + (elapsed / 1000);
+            const currentProgress = (totalElapsed / (totalVideos * sceneDuration)) * 100;
+            progressBar.style.width = `${currentProgress}%`;
+            progressPercent.innerText = `${Math.min(Math.round(currentProgress), 99)}%`;
+
+            requestAnimationFrame(renderFrame);
+          }
+          
+          video.onplay = () => {
+            requestAnimationFrame(renderFrame);
+          };
+          requestAnimationFrame(renderFrame);
+        });
+      }
+
+      // Complete recording
+      statusText.innerText = "廣告片合成完成！正在打包並匯出高品質影片檔案...";
+      progressBar.style.width = "100%";
+      progressPercent.innerText = "100%";
+      estimatedTime.innerText = "剩餘時間: 即將完成";
+      
+      mediaRecorder.stop();
+      await recorderPromise;
+
+      // Save/Download blob
+      const extension = mimeType.includes('mp4') ? 'mp4' : 'webm';
+      const blob = new Blob(recordedChunks, { type: mimeType });
+      const downloadUrl = URL.createObjectURL(blob);
+      
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = `${productName}_15秒黃金口播字幕廣告片.${extension}`;
+      document.body.appendChild(a);
+      a.click();
+      
+      setTimeout(() => {
+        a.remove();
+        URL.revokeObjectURL(downloadUrl);
+      }, 1000);
+
+      // Copy script to clipboard automatically
+      const cleanScripts = scripts.map(s => s.replace(/🔥 |✨ |💎 |⚡ |👇 /g, ""));
+      try {
+        await navigator.clipboard.writeText(cleanScripts.join(" "));
+      } catch (clipErr) {
+        console.warn("Failed to copy script to clipboard:", clipErr);
+      }
+
+      // Show success popup with the script
+      alert(`🎉 15秒黃金口播字幕影片生成下載成功！\n\n📋 系統已為您自動複製以下「黃金帶貨口播文案」：\n\n${scripts.join('\n')}\n\n💡 帶貨秘訣：\n直接將影片導入「剪映 (CapCut)」，選取文字 ➜ 「文字轉語音」➜ 選擇「台灣甜美」或「台灣口播」AI 語音，並配上熱門 BGM，不到 10 秒即可發佈一條百萬流量的帶貨短影音！`);
+
+    } catch (err) {
+      console.error("Video merge error:", err);
+      alert(`⚠️ 影片合成失敗：${err.message || err}\n請確認您的網路連線或嘗試單獨下載分鏡影片。`);
+    } finally {
+      clearInterval(statusTimer);
+      if (progressOverlay) progressOverlay.remove();
+    }
+  }
+
   async triggerBrowserDownload(url, filename) {
     // 1. If it's a Supabase URL, append '?download=' to force Content-Disposition attachment header on server-side
     if (url.includes('supabase') && !url.includes('download=')) {

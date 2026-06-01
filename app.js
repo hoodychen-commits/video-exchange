@@ -1081,18 +1081,53 @@ class AppEngine {
     if (levelVal) levelVal.innerText = `LV.${this.currentUser.level}`;
     if (levelDesc) levelDesc.innerText = levelsMap[this.currentUser.level - 1] || "資深創作者";
     
-    // Level progress calculations (5 uploads for 1 level)
-    const nextLevelUploadCount = this.currentUser.level * 5;
-    const prevLevelUploadCount = (this.currentUser.level - 1) * 5;
-    const progressPercent = Math.min(100, Math.max(10, ((approvedProducts.length - prevLevelUploadCount) / 5) * 100));
-    
-    if (levelFill) levelFill.style.width = `${progressPercent}%`;
+    // Non-linear thresholds for dynamic rendering
+    const thresholds = {
+      1: { uploads: 0, hq: 0 },
+      2: { uploads: 1, hq: 0 },
+      3: { uploads: 3, hq: 1 },
+      4: { uploads: 7, hq: 2 },
+      5: { uploads: 15, hq: 4 },
+      6: { uploads: 30, hq: 9 },
+      7: { uploads: 55, hq: 16 },
+      8: { uploads: 90, hq: 27 },
+      9: { uploads: 140, hq: 42 },
+      10: { uploads: 200, hq: 60 }
+    };
+
+    const currentLvl = this.currentUser.level || 1;
+    const highQualityCount = approvedProducts.filter(p => p.is_quality).length;
+
     if (levelReq) {
-      if (this.currentUser.level >= 10) {
+      if (currentLvl >= 10) {
         levelReq.innerText = "已達到最高等級！享有最高 10個人下載賺 $10 元收益分成";
+        if (levelFill) levelFill.style.width = "100%";
       } else {
-        const remaining = nextLevelUploadCount - approvedProducts.length;
-        levelReq.innerText = `再上架 ${remaining > 0 ? remaining : 1} 部商品素材，並保持高品質即可升級`;
+        const nextLvl = currentLvl + 1;
+        const targetUploads = thresholds[nextLvl].uploads;
+        const targetHq = thresholds[nextLvl].hq;
+        
+        const remainingUploads = Math.max(0, targetUploads - approvedProducts.length);
+        const remainingHq = Math.max(0, targetHq - highQualityCount);
+
+        let reqText = '';
+        if (remainingUploads > 0 && remainingHq > 0) {
+          reqText = `再上架 ${remainingUploads} 部商品素材，且包含至少 ${remainingHq} 部高品質標記即可升級`;
+        } else if (remainingUploads > 0) {
+          reqText = `再上架 ${remainingUploads} 部商品素材即可升級`;
+        } else if (remainingHq > 0) {
+          reqText = `您的上架數已達標，但高品質影片尚差 ${remainingHq} 部，提升品質即可升級`;
+        } else {
+          reqText = `即將升級！等待系統重新載入數據`;
+        }
+        levelReq.innerText = reqText;
+
+        // Progress bar percentage calculation (區間百分比，更細緻合理)
+        const prevTarget = thresholds[currentLvl].uploads;
+        const totalStep = targetUploads - prevTarget;
+        const currentProgress = approvedProducts.length - prevTarget;
+        const progressPercent = Math.min(100, Math.max(10, (currentProgress / (totalStep || 1)) * 100));
+        if (levelFill) levelFill.style.width = `${progressPercent}%`;
       }
     }
 
@@ -1330,13 +1365,23 @@ class AppEngine {
     const myApproved = this.products.filter(p => p.creator_id === this.currentUser.id && p.status === 'approved');
     const highQualityCount = myApproved.filter(p => p.is_quality).length;
 
-    // Formulas: LV 1 to 10
-    // Every 5 uploads upgrades level, with a minimum required "high quality" tags
+    // Non-linear thresholds (80% users inside LV 7, only 20% can reach LV 10)
+    const thresholds = {
+      1: { uploads: 0, hq: 0 },
+      2: { uploads: 1, hq: 0 },
+      3: { uploads: 3, hq: 1 },
+      4: { uploads: 7, hq: 2 },
+      5: { uploads: 15, hq: 4 },
+      6: { uploads: 30, hq: 9 },
+      7: { uploads: 55, hq: 16 },
+      8: { uploads: 90, hq: 27 },
+      9: { uploads: 140, hq: 42 },
+      10: { uploads: 200, hq: 60 }
+    };
+
     let calculatedLevel = 1;
     for (let l = 2; l <= 10; l++) {
-      const requiredUploads = (l - 1) * 5;
-      const requiredHq = Math.floor(requiredUploads * 0.3); // 30% of uploads must be high quality
-      if (myApproved.length >= requiredUploads && highQualityCount >= requiredHq) {
+      if (myApproved.length >= thresholds[l].uploads && highQualityCount >= thresholds[l].hq) {
         calculatedLevel = l;
       } else {
         break;

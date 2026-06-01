@@ -556,30 +556,39 @@ class AppEngine {
     }
   }
 
-  saveUsers() {
+  async saveUsers() {
     localStorage.setItem('app_users', JSON.stringify(this.users));
     if (this.isCloudMode) {
-      this.supabase.from('users').upsert(this.users).then(({ error }) => {
+      try {
+        const { error } = await this.supabase.from('users').upsert(this.users);
         if (error) console.error("Cloud users sync failed:", error.message);
-      });
+      } catch (err) {
+        console.error("Cloud users sync error:", err);
+      }
     }
   }
 
-  saveProducts() {
+  async saveProducts() {
     localStorage.setItem('app_products', JSON.stringify(this.products));
     if (this.isCloudMode) {
-      this.supabase.from('products').upsert(this.products).then(({ error }) => {
+      try {
+        const { error } = await this.supabase.from('products').upsert(this.products);
         if (error) console.error("Cloud products sync failed:", error.message);
-      });
+      } catch (err) {
+        console.error("Cloud products sync error:", err);
+      }
     }
   }
 
-  saveWithdrawals() {
+  async saveWithdrawals() {
     localStorage.setItem('app_withdrawals', JSON.stringify(this.withdrawals));
     if (this.isCloudMode) {
-      this.supabase.from('withdrawals').upsert(this.withdrawals).then(({ error }) => {
+      try {
+        const { error } = await this.supabase.from('withdrawals').upsert(this.withdrawals);
         if (error) console.error("Cloud withdrawals sync failed:", error.message);
-      });
+      } catch (err) {
+        console.error("Cloud withdrawals sync error:", err);
+      }
     }
   }
 
@@ -1037,7 +1046,7 @@ class AppEngine {
     };
 
     this.users.push(newUser);
-    this.saveUsers();
+    await this.saveUsers(); // Await the cloud insertion to complete before navigating
     this.currentUser = newUser;
     localStorage.setItem('app_session', newUser.id);
 
@@ -1923,7 +1932,7 @@ class AppEngine {
     return true;
   }
 
-  downloadSelectedScenes() {
+  async downloadSelectedScenes() {
     const checkboxes = document.querySelectorAll('input[name="scene-chk"]:checked');
     if (checkboxes.length === 0) {
       alert("請至少勾選一部影片分鏡進行下載！");
@@ -1933,16 +1942,22 @@ class AppEngine {
     // Deduct 5 points
     if (!this.deductCredits()) return;
 
-    checkboxes.forEach((cb, index) => {
-      const url = cb.value;
-      this.triggerBrowserDownload(url, `scene_material_${index + 1}.mp4`);
-    });
+    // Show indicator
+    alert(`🎉 成功扣除 5 積分！系統即將為您打包下載所選的 ${checkboxes.length} 個分鏡影片。\n若瀏覽器彈出「允許下載多個檔案」提示，請務必點選「允許」！`);
 
-    alert(`🎉 成功扣除 5 積分！已為您打包下載所選的 ${checkboxes.length} 個分鏡影片。`);
+    for (let i = 0; i < checkboxes.length; i++) {
+      const url = checkboxes[i].value;
+      if (i > 0) {
+        // 1-second delay so browser doesn't block bulk downloads
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+      this.triggerBrowserDownload(url, `scene_material_${i + 1}.mp4`);
+    }
+
     this.closeProductDetailModal();
   }
 
-  downloadAllScenes() {
+  async downloadAllScenes() {
     const checkboxes = document.querySelectorAll('input[name="scene-chk"]');
     if (checkboxes.length === 0) {
       alert("本商品無可用影片素材。");
@@ -1952,12 +1967,16 @@ class AppEngine {
     // Deduct 5 points
     if (!this.deductCredits()) return;
 
-    checkboxes.forEach((cb, index) => {
-      const url = cb.value;
-      this.triggerBrowserDownload(url, `scene_complete_material_${index + 1}.mp4`);
-    });
+    alert(`🎉 成功扣除 5 積分！系統即將為您打包下載此商品之全部 ${checkboxes.length} 個分鏡素材！\n若瀏覽器彈出「允許下載多個檔案」提示，請務必點選「允許」！`);
 
-    alert(`🎉 成功扣除 5 積分！已打包下載此商品之全部 ${checkboxes.length} 個分鏡素材！`);
+    for (let i = 0; i < checkboxes.length; i++) {
+      const url = checkboxes[i].value;
+      if (i > 0) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+      this.triggerBrowserDownload(url, `scene_complete_material_${i + 1}.mp4`);
+    }
+
     this.closeProductDetailModal();
   }
 

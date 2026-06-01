@@ -25,6 +25,7 @@ class AppEngine {
     this.withdrawals = [];
     this.activeView = 'home';
     this.adminActiveTab = 'approve-materials';
+    this.adminProductFilter = 'pending';
     this.uploadedFiles = {
       unboxing: [],
       display: [],
@@ -34,6 +35,8 @@ class AppEngine {
       other: []
     };
     this.watermarkInterval = null;
+    this.isCloudMode = false;
+    this.supabase = null;
 
     // Supabase config hooks (can be set up directly in production)
     this.supabaseConfig = {
@@ -44,41 +47,351 @@ class AppEngine {
     this.init();
   }
 
-  init() {
-    // Load state from localStorage or populate mock database defaults
-    this.loadState();
+  async init() {
+    // 1. Initialize database connection (Supabase if configured, otherwise fall back to LocalStorage)
+    await this.initDatabaseConnection();
+
+    // 2. Load state from cloud or localStorage
+    await this.loadState();
     
-    // Bind global security blockers
+    // 3. Bind global security blockers
     this.bindSecurityEvents();
     
-    // Check if user session already exists
+    // 4. Check if user session already exists
     this.checkSession();
 
-    // Initial render
+    // 5. Initial render
     this.renderNavigation();
     this.renderProducts();
     this.renderAdminPanels();
     this.startFloatingWatermark();
     
-    // Periodic synchronization alert mockup
+    // Setup Admin Secure Hidden Entry Points
+    this.initAdminSecureEntry();
+
+    // Render database connection status
+    this.renderCloudStatusBanner();
+    
+    // Periodic synchronization alert mockup/actual sync toast
     setInterval(() => {
       if (this.currentUser) {
-        this.triggerCloudSyncToast("實時雲端資料庫已同步更新...");
+        this.triggerCloudSyncToast(this.isCloudMode ? "雲端資料庫增量同步中..." : "實時雲端資料庫已同步更新...");
       }
     }, 45000);
   }
 
   // --------------------------------------------------
+  // 0. CLOUD DATABASE & CONNECTION ENGINE (SUPABASE)
+  // --------------------------------------------------
+  async initDatabaseConnection() {
+    // Check local storage for runtime configuration first
+    let url = localStorage.getItem('supabase_url');
+    let key = localStorage.getItem('supabase_key');
+
+    // If not in local storage, check if the hardcoded values are real (not placeholders)
+    if (!url || !key) {
+      const defaultUrl = this.supabaseConfig.url;
+      const defaultKey = this.supabaseConfig.anonKey;
+      if (defaultUrl && !defaultUrl.includes('your-supabase-project') && defaultKey && !defaultKey.includes('your-key-here')) {
+        url = defaultUrl;
+        key = defaultKey;
+      }
+    }
+
+    if (url && key && typeof supabase !== 'undefined') {
+      try {
+        // Initialize client
+        this.supabase = supabase.createClient(url, key);
+        
+        // Test connection by fetching one record from users table
+        const { data, error } = await this.supabase.from('users').select('id').limit(1);
+        if (!error) {
+          this.isCloudMode = true;
+          this.supabaseConfig.url = url;
+          this.supabaseConfig.anonKey = key;
+          console.log("Connected successfully to Supabase Cloud Database!");
+        } else {
+          console.warn("Supabase connection failed, falling back to LocalStorage:", error.message);
+          this.isCloudMode = false;
+        }
+      } catch (err) {
+        console.error("Failed to connect to Supabase:", err);
+        this.isCloudMode = false;
+      }
+    } else {
+      this.isCloudMode = false;
+    }
+  }
+
+  renderCloudStatusBanner() {
+    const banner = document.getElementById('cloud-sync-banner');
+    const icon = document.getElementById('cloud-status-icon');
+    const text = document.getElementById('cloud-status-text');
+    const btn = document.getElementById('cloud-action-btn');
+
+    if (!banner) return;
+
+    if (this.isCloudMode) {
+      banner.className = 'cloud-sync-banner cloud-success';
+      if (icon) {
+        icon.className = 'fa-solid fa-cloud-arrow-up';
+      }
+      if (text) {
+        text.innerHTML = `實時雲端資料庫已啟用 — 所有裝置與手機端正實時互通中！`;
+      }
+      if (btn) {
+        btn.innerHTML = `<i class="fa-solid fa-gear"></i> 雲端連線設定`;
+      }
+    } else {
+      banner.className = 'cloud-sync-banner cloud-warning';
+      if (icon) {
+        icon.className = 'fa-solid fa-cloud-bolt';
+      }
+      if (text) {
+        text.innerHTML = `本機模擬模式 (LocalStorage) — 按右側「啟用雲端同步」讓大家的手機實時互通`;
+      }
+      if (btn) {
+        btn.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i> 啟用雲端同步`;
+      }
+    }
+  }
+
+  openCloudSettingsModal() {
+    const modal = document.getElementById('cloud-sync-modal');
+    if (modal) {
+      modal.classList.remove('hidden');
+      
+      const urlInput = document.getElementById('cloud-supabase-url');
+      const keyInput = document.getElementById('cloud-supabase-key');
+      
+      if (urlInput) urlInput.value = localStorage.getItem('supabase_url') || (this.supabaseConfig.url.includes('your-supabase-project') ? '' : this.supabaseConfig.url);
+      if (keyInput) keyInput.value = localStorage.getItem('supabase_key') || (this.supabaseConfig.anonKey.includes('your-key-here') ? '' : this.supabaseConfig.anonKey);
+    }
+  }
+
+  closeCloudSettingsModal() {
+    const modal = document.getElementById('cloud-sync-modal');
+    if (modal) {
+      modal.classList.add('hidden');
+    }
+  }
+
+  async saveCloudSettings(event) {
+    event.preventDefault();
+    const url = document.getElementById('cloud-supabase-url').value.trim();
+    const key = document.getElementById('cloud-supabase-key').value.trim();
+
+    if (!url || !key) {
+      alert("請填寫完整的 Supabase URL 與 Anon Key。");
+      return;
+    }
+
+    if (typeof supabase === 'undefined') {
+      alert("⚠️ Supabase SDK 尚未載入，請檢查網路連線是否正常。");
+      return;
+    }
+
+    try {
+      const testClient = supabase.createClient(url, key);
+      const { error } = await testClient.from('users').select('id').limit(1);
+      
+      if (error && error.message.includes('relation "public.users" does not exist')) {
+        alert("❌ 連線成功，但找不到 'users' 資料表！\n請先前往 Supabase 控制面板運行 SQL 建表腳本。");
+        return;
+      } else if (error) {
+        alert(`❌ 測試連線失敗：${error.message}\n請檢查 URL 與 Key 是否填寫正確。`);
+        return;
+      }
+      
+      localStorage.setItem('supabase_url', url);
+      localStorage.setItem('supabase_key', key);
+      
+      alert("🎉 雲端連線測試成功！網頁即將重新整理以套用新設定。");
+      this.closeCloudSettingsModal();
+      window.location.reload();
+    } catch (err) {
+      alert(`❌ 測試連線發生錯誤：${err.message || err}`);
+    }
+  }
+
+  clearCloudSettings() {
+    if (confirm("確定要清除雲端資料庫設定並切換回 LocalStorage 本地模擬模式嗎？")) {
+      localStorage.removeItem('supabase_url');
+      localStorage.removeItem('supabase_key');
+      alert("已清除雲端設定，即將重新整理。");
+      window.location.reload();
+    }
+  }
+
+  // --------------------------------------------------
+  // 0. ADMIN SECURE ENTRY & AUTHENTICATION (HIDDEN)
+  // --------------------------------------------------
+  async sha256(message) {
+    const msgBuffer = new TextEncoder().encode(message);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    return hashHex;
+  }
+
+  initAdminSecureEntry() {
+    // 1. Secret URL Query Parameter Detection
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('portal') === 'admin') {
+      // Clear URL parameter so it's not sitting in address bar permanently
+      const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+      window.history.replaceState({path: cleanUrl}, '', cleanUrl);
+      
+      // Delay slightly to let the page render, then open the admin secure modal
+      setTimeout(() => {
+        this.openAdminSecureModal();
+      }, 500);
+    }
+
+    // 2. Easter Egg Double Clicks Detection (5 clicks on logo/title within 3 seconds)
+    let clickCount = 0;
+    let lastClickTime = 0;
+    const titleEl = document.getElementById('main-title-logo');
+    if (titleEl) {
+      titleEl.addEventListener('click', () => {
+        const currentTime = new Date().getTime();
+        if (currentTime - lastClickTime < 3000) {
+          clickCount++;
+        } else {
+          clickCount = 1; // reset if gap too long
+        }
+        lastClickTime = currentTime;
+
+        if (clickCount >= 5) {
+          clickCount = 0; // reset
+          this.openAdminSecureModal();
+        }
+      });
+    }
+  }
+
+  openAdminSecureModal() {
+    // Close other auth modal if open
+    this.closeAuthModal();
+    const modal = document.getElementById('admin-secure-modal');
+    if (modal) {
+      modal.classList.remove('hidden');
+      document.getElementById('admin-login-email').value = '';
+      document.getElementById('admin-login-password').value = '';
+      document.getElementById('admin-login-email').focus();
+    }
+  }
+
+  closeAdminSecureModal() {
+    const modal = document.getElementById('admin-secure-modal');
+    if (modal) {
+      modal.classList.add('hidden');
+    }
+  }
+
+  async handleAdminSecureLogin(event) {
+    event.preventDefault();
+    const email = document.getElementById('admin-login-email').value.trim();
+    const password = document.getElementById('admin-login-password').value;
+
+    if (!email || !password) {
+      alert("請完整輸入所有欄位。");
+      return;
+    }
+
+    // Hash the password input
+    const inputHash = await this.sha256(password);
+
+    // Find admin user
+    const adminUser = this.users.find(u => u.id === 'usr_admin');
+    if (!adminUser) {
+      alert("❌ 系統錯誤：找不到超級管理員帳號資料！");
+      return;
+    }
+
+    if (email === adminUser.email && inputHash === adminUser.passwordHash) {
+      // Login successful!
+      this.currentUser = adminUser;
+      localStorage.setItem('app_session', adminUser.id);
+
+      this.triggerCloudSyncToast("管理員安全認證成功！");
+      this.closeAdminSecureModal();
+      this.renderNavigation();
+      this.navigate('admin'); // Navigate directly to admin panel
+      this.startFloatingWatermark();
+      alert("🔑 歡迎回來，超級管理員！已成功解鎖安全後台權限。");
+    } else {
+      // Brute force delay protection
+      const submitBtn = event.target.querySelector('button[type="submit"]');
+      if (submitBtn) submitBtn.disabled = true;
+      alert("❌ 認證失敗：管理員帳號或加密認證密碼錯誤！\n已啟用防暴力破解機制，請於 3 秒後重試。");
+      setTimeout(() => {
+        if (submitBtn) submitBtn.disabled = false;
+      }, 3000);
+    }
+  }
+
+  // --------------------------------------------------
   // 1. STATE & STORAGE MANAGEMENT
   // --------------------------------------------------
-  loadState() {
+  async loadState() {
+    if (this.isCloudMode) {
+      try {
+        // Load users from Supabase
+        let { data: dbUsers, error: uErr } = await this.supabase.from('users').select('*');
+        if (uErr) throw uErr;
+        this.users = dbUsers || [];
+
+        // If admin user is not found, automatically insert it
+        const admin = this.users.find(u => u.id === 'usr_admin');
+        if (!admin) {
+          const defaultAdmin = {
+            id: "usr_admin",
+            name: "超級管理員",
+            phone: "admin_secure_credential_102948",
+            email: "admin@material.exchange",
+            roles: ["admin"],
+            role: "admin",
+            level: 10,
+            balance: 99999,
+            seller_credits: 99999,
+            total_earnings: 99999,
+            passwordHash: "f82c4e8e977661db058bde5695bd77d0a0e446538fcb60bc290cc8ab63d21d12",
+            created_at: new Date().toISOString()
+          };
+          const { error: insErr } = await this.supabase.from('users').insert([defaultAdmin]);
+          if (!insErr) {
+            this.users.push(defaultAdmin);
+          } else {
+            console.error("Auto-creating admin failed:", insErr.message);
+          }
+        }
+
+        // Load products from Supabase
+        let { data: dbProducts, error: pErr } = await this.supabase.from('products').select('*');
+        if (!pErr) this.products = dbProducts || [];
+
+        // Load withdrawals from Supabase
+        let { data: dbWithdrawals, error: wErr } = await this.supabase.from('withdrawals').select('*');
+        if (!wErr) this.withdrawals = dbWithdrawals || [];
+
+        console.log("State successfully synchronized from Supabase Cloud!");
+      } catch (err) {
+        console.error("Error loading state from Supabase, using LocalStorage fallback:", err);
+        this.loadStateFromLocalStorage();
+      }
+    } else {
+      this.loadStateFromLocalStorage();
+    }
+  }
+
+  loadStateFromLocalStorage() {
     const localUsers = localStorage.getItem('app_users');
     const localProducts = localStorage.getItem('app_products');
     const localWithdrawals = localStorage.getItem('app_withdrawals');
 
     if (localUsers) {
       this.users = JSON.parse(localUsers);
-      // Migration Helper: convert old schema users to multi-role schema
       this.users.forEach(u => {
         if (!u.roles) {
           u.roles = [u.role || 'creator'];
@@ -89,23 +402,38 @@ class AppEngine {
         if (u.seller_credits === undefined) {
           u.seller_credits = u.role === 'seller' ? (u.balance || 0) : 0;
           if (u.role === 'seller') {
-            u.balance = 0; // Separate cash balance from points
+            u.balance = 0;
           }
         }
       });
+      
+      const storedAdmin = this.users.find(u => u.id === 'usr_admin');
+      if (storedAdmin) {
+        let changed = false;
+        if (storedAdmin.phone !== 'admin_secure_credential_102948') {
+          storedAdmin.phone = 'admin_secure_credential_102948';
+          changed = true;
+        }
+        if (storedAdmin.passwordHash !== 'f82c4e8e977661db058bde5695bd77d0a0e446538fcb60bc290cc8ab63d21d12') {
+          storedAdmin.passwordHash = 'f82c4e8e977661db058bde5695bd77d0a0e446538fcb60bc290cc8ab63d21d12';
+          changed = true;
+        }
+        if (changed) {
+          this.saveUsers();
+        }
+      }
     } else {
-      // Default Mock Users
       this.users = [
         {
           id: "usr_creator_01",
           name: "陳阿明",
           phone: "0912345678",
           email: "amin@example.com",
-          roles: ["creator", "seller"], // Dual Roles!
-          role: "creator", // Current Active Role
+          roles: ["creator", "seller"],
+          role: "creator",
           level: 3,
-          balance: 1250, // Creator Earnings (TWD Cash)
-          seller_credits: 2000, // Seller Point Credits
+          balance: 1250,
+          seller_credits: 2000,
           total_earnings: 1250,
           created_at: new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString(),
           bank_info: {
@@ -124,14 +452,14 @@ class AppEngine {
           role: "seller",
           level: 1,
           balance: 0,
-          seller_credits: 4500, // Points
+          seller_credits: 4500,
           total_earnings: 0,
           created_at: new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString()
         },
         {
           id: "usr_admin",
           name: "超級管理員",
-          phone: "0900000000",
+          phone: "admin_secure_credential_102948",
           email: "admin@material.exchange",
           roles: ["admin"],
           role: "admin",
@@ -139,6 +467,7 @@ class AppEngine {
           balance: 99999,
           seller_credits: 99999,
           total_earnings: 99999,
+          passwordHash: "f82c4e8e977661db058bde5695bd77d0a0e446538fcb60bc290cc8ab63d21d12",
           created_at: new Date().toISOString()
         }
       ];
@@ -148,7 +477,6 @@ class AppEngine {
     if (localProducts) {
       this.products = JSON.parse(localProducts);
     } else {
-      // Default Mock Products
       this.products = [
         {
           id: "prod_01",
@@ -231,14 +559,29 @@ class AppEngine {
 
   saveUsers() {
     localStorage.setItem('app_users', JSON.stringify(this.users));
+    if (this.isCloudMode) {
+      this.supabase.from('users').upsert(this.users).then(({ error }) => {
+        if (error) console.error("Cloud users sync failed:", error.message);
+      });
+    }
   }
 
   saveProducts() {
     localStorage.setItem('app_products', JSON.stringify(this.products));
+    if (this.isCloudMode) {
+      this.supabase.from('products').upsert(this.products).then(({ error }) => {
+        if (error) console.error("Cloud products sync failed:", error.message);
+      });
+    }
   }
 
   saveWithdrawals() {
     localStorage.setItem('app_withdrawals', JSON.stringify(this.withdrawals));
+    if (this.isCloudMode) {
+      this.supabase.from('withdrawals').upsert(this.withdrawals).then(({ error }) => {
+        if (error) console.error("Cloud withdrawals sync failed:", error.message);
+      });
+    }
   }
 
   checkSession() {
@@ -383,12 +726,24 @@ class AppEngine {
   // --------------------------------------------------
   // 3. NAVIGATION & VIEW SYSTEM
   // --------------------------------------------------
-  navigate(viewId) {
+  async navigate(viewId) {
     // Auth Wall check
     if (viewId !== 'home' && !this.currentUser) {
       alert("請先完成註冊或登入後，即可開啟此版塊！");
       this.openAuthModal('register');
       return;
+    }
+
+    // Pull latest data from Supabase before rendering to ensure real-time sync across devices
+    if (this.isCloudMode) {
+      await this.loadState();
+      // Refresh current user session in case balance or details changed on other devices/backend
+      if (this.currentUser) {
+        const freshUser = this.users.find(u => u.id === this.currentUser.id);
+        if (freshUser) {
+          this.currentUser = freshUser;
+        }
+      }
     }
 
     this.activeView = viewId;
@@ -627,7 +982,7 @@ class AppEngine {
     }
   }
 
-  handleRegister(event) {
+  async handleRegister(event) {
     event.preventDefault();
     const name = document.getElementById('reg-name').value.trim();
     const phone = document.getElementById('reg-phone').value.trim();
@@ -651,6 +1006,11 @@ class AppEngine {
     if (!agreement) {
       alert("您必須同意原創版權合規授權條款，方能使用本平台。");
       return;
+    }
+
+    // Pull latest data in Cloud Mode to avoid duplicate registration
+    if (this.isCloudMode) {
+      await this.loadState();
     }
 
     // Check if phone number is taken
@@ -691,7 +1051,7 @@ class AppEngine {
     this.startFloatingWatermark();
   }
 
-  handleLogin(event) {
+  async handleLogin(event) {
     event.preventDefault();
     const phone = document.getElementById('login-phone').value.trim();
 
@@ -700,10 +1060,21 @@ class AppEngine {
       return;
     }
 
+    // Pull latest data in Cloud Mode
+    if (this.isCloudMode) {
+      await this.loadState();
+    }
+
     const user = this.users.find(u => u.phone === phone);
     if (!user) {
       alert("找不到此電話號碼註冊紀錄，請先填寫上方表單進行註冊！");
       this.switchAuthTab('register');
+      return;
+    }
+
+    // Safety check: block admin logging in via public phone login
+    if (user.role === 'admin' || (user.roles && user.roles.includes('admin'))) {
+      alert("🛡️ 安全警告：管理員帳號不開放電話直接登入，請由管理員專用加密通道登入！");
       return;
     }
 
@@ -918,7 +1289,7 @@ class AppEngine {
     }
   }
 
-  handleCreatorUpload(event) {
+  async handleCreatorUpload(event) {
     event.preventDefault();
     if (!this.currentUser) return;
 
@@ -938,15 +1309,9 @@ class AppEngine {
 
     // Verify if at least one scene video is uploaded
     let totalVideos = 0;
-    const scenesData = {};
-
     for (const scene in this.uploadedFiles) {
       if (this.uploadedFiles[scene].length > 0) {
         totalVideos += this.uploadedFiles[scene].length;
-        // Mock temporary blob URL for visual playback in the SPA
-        scenesData[scene] = this.uploadedFiles[scene].map(file => URL.createObjectURL(file));
-      } else {
-        scenesData[scene] = [];
       }
     }
 
@@ -955,28 +1320,99 @@ class AppEngine {
       return;
     }
 
-    const newProduct = {
-      id: "prod_" + Math.random().toString(36).substring(2, 11),
-      creator_id: this.currentUser.id,
-      creator_name: this.currentUser.name,
-      name,
-      photo_url: preview.src, // Base64
-      status: "pending",
-      downloads_count: 0,
-      created_at: new Date().toISOString(),
-      is_quality: false, // Updated by Admin backend
-      scenes: scenesData
-    };
+    // UI Loading State (Very helpful for mobile!)
+    const submitBtn = event.target.querySelector('button[type="submit"]');
+    const originalBtnHtml = submitBtn.innerHTML;
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 正在上傳影片與封面至雲端，請勿關閉視窗...`;
 
-    this.products.push(newProduct);
-    this.saveProducts();
-    this.resetUploadForm();
+    try {
+      let finalPhotoUrl = preview.src; // Default base64 for LocalStorage
+      const scenesData = {};
 
-    this.triggerCloudSyncToast("商品素材上傳成功！已提交後台審核！");
-    alert("您的商品分鏡素材已成功上傳，管理員將於 24 小時內完成質量審核！");
-    
-    this.renderCreatorStats();
-    this.renderAdminPanels();
+      if (this.isCloudMode) {
+        // 1. Upload Cover photo to Supabase Storage
+        if (photoInput.files && photoInput.files[0]) {
+          const photoFile = photoInput.files[0];
+          const photoExt = photoFile.name.split('.').pop();
+          const photoPath = `cover_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${photoExt}`;
+          
+          const { error: photoErr } = await this.supabase.storage
+            .from('product-photos')
+            .upload(photoPath, photoFile);
+            
+          if (photoErr) throw photoErr;
+          
+          finalPhotoUrl = this.supabase.storage
+            .from('product-photos')
+            .getPublicUrl(photoPath).data.publicUrl;
+        }
+
+        // 2. Upload Scene videos to Supabase Storage
+        for (const scene in this.uploadedFiles) {
+          if (this.uploadedFiles[scene].length > 0) {
+            const uploadedUrls = [];
+            for (const file of this.uploadedFiles[scene]) {
+              const videoExt = file.name.split('.').pop();
+              const videoPath = `video_${scene}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${videoExt}`;
+              
+              const { error: videoErr } = await this.supabase.storage
+                .from('product-videos')
+                .upload(videoPath, file);
+                
+              if (videoErr) throw videoErr;
+              
+              const publicUrl = this.supabase.storage
+                .from('product-videos')
+                .getPublicUrl(videoPath).data.publicUrl;
+                
+              uploadedUrls.push(publicUrl);
+            }
+            scenesData[scene] = uploadedUrls;
+          } else {
+            scenesData[scene] = [];
+          }
+        }
+      } else {
+        // Local fallback: Object URLs (visual-only, lost on refresh)
+        for (const scene in this.uploadedFiles) {
+          if (this.uploadedFiles[scene].length > 0) {
+            scenesData[scene] = this.uploadedFiles[scene].map(file => URL.createObjectURL(file));
+          } else {
+            scenesData[scene] = [];
+          }
+        }
+      }
+
+      const newProduct = {
+        id: "prod_" + Math.random().toString(36).substring(2, 11),
+        creator_id: this.currentUser.id,
+        creator_name: this.currentUser.name,
+        name,
+        photo_url: finalPhotoUrl,
+        status: "pending",
+        downloads_count: 0,
+        created_at: new Date().toISOString(),
+        is_quality: false, // Updated by Admin backend
+        scenes: scenesData
+      };
+
+      this.products.push(newProduct);
+      this.saveProducts();
+      this.resetUploadForm();
+
+      this.triggerCloudSyncToast("商品素材上傳成功！已提交後台審核！");
+      alert("您的商品分鏡素材已成功上傳，管理員將於 24 小時內完成質量審核！");
+      
+      this.renderCreatorStats();
+      this.renderAdminPanels();
+    } catch (uploadErr) {
+      console.error("Upload failed:", uploadErr);
+      alert(`❌ 上傳失敗：${uploadErr.message || uploadErr}\n請確保您的 Supabase 專案已經創立了名為 'product-photos' 與 'product-videos' 且設定為公開 (Public) 的 Storage 儲存桶。`);
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = originalBtnHtml;
+    }
   }
 
   resetUploadForm() {
@@ -1540,6 +1976,74 @@ class AppEngine {
   // --------------------------------------------------
   // 8. ADMIN BACKEND (Reviews & Payout Controls)
   // --------------------------------------------------
+  setAdminProductFilter(filterType, btnElement) {
+    this.adminProductFilter = filterType;
+
+    // Toggle active class visually on the buttons in the filter bar
+    const filterBtns = btnElement.parentElement.querySelectorAll('button');
+    filterBtns.forEach(btn => {
+      btn.classList.add('btn-outline');
+      btn.style.backgroundColor = '';
+      btn.style.color = '';
+    });
+
+    btnElement.classList.remove('btn-outline');
+    btnElement.style.backgroundColor = 'var(--border-dark)';
+    btnElement.style.color = 'var(--bg-primary)';
+
+    this.renderAdminPanels();
+  }
+
+  adminEditProductTitle(productId) {
+    const p = this.products.find(x => x.id === productId);
+    if (!p) return;
+
+    const newTitle = prompt("請輸入商品的新標題：", p.name);
+    if (newTitle === null) return; // cancelled
+
+    const trimmedTitle = newTitle.trim();
+    if (!trimmedTitle) {
+      alert("標題不能為空！");
+      return;
+    }
+
+    p.name = trimmedTitle;
+    this.saveProducts();
+
+    this.triggerCloudSyncToast("商品標題已更新成功！");
+    this.renderAdminPanels();
+    this.renderProducts(); // Update landing lists
+  }
+
+  adminDeleteProductScene(productId, sceneKey, index) {
+    const p = this.products.find(x => x.id === productId);
+    if (!p) return;
+
+    const chineseScenes = {
+      unboxing: "開箱分鏡", display: "產品展示", effect: "產品效果",
+      detail: "產品細節", usage: "產品使用", other: "其他創意"
+    };
+    const sceneName = chineseScenes[sceneKey] || "分鏡";
+
+    if (!confirm(`⚠️ 確定要刪除該商品下第 ${index + 1} 個【${sceneName}】分鏡影片嗎？\n此動作將即時刪除，且不可撤銷！`)) {
+      return;
+    }
+
+    // Splice from array
+    if (p.scenes[sceneKey] && p.scenes[sceneKey][index]) {
+      p.scenes[sceneKey].splice(index, 1);
+      this.saveProducts();
+
+      this.triggerCloudSyncToast("影片分鏡已刪除成功！");
+      this.renderAdminPanels();
+      
+      // If the product details lightbox is currently opened, we refresh it
+      if (this.activeDetailedProduct && this.activeDetailedProduct.id === productId) {
+        this.openProductDetailModal(productId);
+      }
+    }
+  }
+
   switchAdminTab(tabId, btnElement) {
     this.adminActiveTab = tabId;
 
@@ -1571,20 +2075,33 @@ class AppEngine {
 
     const mCount = document.getElementById('admin-pending-materials-count');
     const wCount = document.getElementById('admin-pending-withdrawals-count');
-    const mBadgeCount = document.getElementById('admin-pending-materials-count');
-    const wBadgeCount = document.getElementById('admin-pending-withdrawals-count');
 
     if (mCount) mCount.innerText = pendingProds.length;
     if (wCount) wCount.innerText = pendingWtd.length;
 
-    // 2. Pending Materials Container
+    // 2. Filtered Materials Container
     const matContainer = document.getElementById('admin-pending-materials-container');
     if (matContainer) {
-      if (pendingProds.length === 0) {
-        matContainer.innerHTML = `<div class="text-center text-muted py-4">目前暫無等待審核的創作者素材 😊</div>`;
+      let displayProds = [];
+      if (this.adminProductFilter === 'pending') {
+        displayProds = this.products.filter(p => p.status === 'pending');
+      } else if (this.adminProductFilter === 'approved') {
+        displayProds = this.products.filter(p => p.status === 'approved');
+      } else {
+        displayProds = this.products;
+      }
+
+      if (displayProds.length === 0) {
+        let emptyText = "目前暫無等待審核的創作者素材 😊";
+        if (this.adminProductFilter === 'approved') {
+          emptyText = "目前暫無已上架的商品素材 📦";
+        } else if (this.adminProductFilter === 'all') {
+          emptyText = "目前平台暫無任何商品素材 🔍";
+        }
+        matContainer.innerHTML = `<div class="text-center text-muted py-4">${emptyText}</div>`;
       } else {
         matContainer.innerHTML = '';
-        pendingProds.forEach(p => {
+        displayProds.forEach(p => {
           const card = document.createElement('div');
           card.className = 'pending-item-card';
           
@@ -1599,9 +2116,12 @@ class AppEngine {
             if (urls.length > 0) {
               urls.forEach((url, i) => {
                 scenesGridHtml += `
-                  <div class="admin-scene-player">
+                  <div class="admin-scene-player" style="position: relative; display: flex; flex-direction: column; justify-content: space-between; min-height: 180px;">
                     <span>${chineseScenes[key]} (#${i+1})</span>
-                    <video src="${url}" controls oncontextmenu="return false;" controlslist="nodownload"></video>
+                    <video src="${url}" controls oncontextmenu="return false;" controlslist="nodownload" style="flex-grow: 1; min-height: 100px; max-height: 120px; object-fit: contain;"></video>
+                    <button class="btn btn-sm btn-outline text-danger w-100" style="margin-top: 6px; padding: 4px; font-size: 11px; font-weight: 700; border-color: rgba(239,68,68,0.2);" onclick="app.adminDeleteProductScene('${p.id}', '${key}', ${i})">
+                      <i class="fa-solid fa-trash-can"></i> 刪除分鏡
+                    </button>
                   </div>
                 `;
               });
@@ -1613,14 +2133,26 @@ class AppEngine {
               <div class="pending-product-info">
                 <div class="pending-product-thumb"><img src="${p.photo_url}"></div>
                 <div class="pending-product-meta">
-                  <h4>${p.name}</h4>
-                  <span>創作者: <b>${p.creator_name}</b> • 提交於: ${new Date(p.created_at).toLocaleDateString()}</span>
+                  <h4 style="display: flex; align-items: center; gap: 8px;">
+                    <span>${p.name}</span>
+                    <button class="btn btn-sm btn-outline" style="padding: 2px 6px; font-size: 11px; height: auto; display: inline-flex; align-items: center; gap: 4px;" onclick="app.adminEditProductTitle('${p.id}')">
+                      <i class="fa-regular fa-pen-to-square"></i> 編輯標題
+                    </button>
+                  </h4>
+                  <span>創作者: <b>${p.creator_name}</b> • 狀態: <b class="${p.status === 'approved' ? 'text-seller' : 'text-amber'}">${p.status === 'approved' ? '已上架' : '待審核'}</b> • 提交於: ${new Date(p.created_at).toLocaleDateString()}</span>
                 </div>
               </div>
               <div class="admin-action-btns">
-                <button class="btn btn-sm btn-outline" onclick="app.adminApproveProduct('${p.id}', true)"><i class="fa-solid fa-gem text-amber"></i> 高優質通過</button>
-                <button class="btn btn-sm btn-seller" onclick="app.adminApproveProduct('${p.id}', false)"><i class="fa-solid fa-check"></i> 審核通過</button>
-                <button class="btn btn-sm btn-outline text-danger" onclick="app.adminRejectProduct('${p.id}')"><i class="fa-solid fa-xmark"></i> 拒絕退回</button>
+                ${p.status === 'pending' ? `
+                  <button class="btn btn-sm btn-outline" onclick="app.adminApproveProduct('${p.id}', true)"><i class="fa-solid fa-gem text-amber"></i> 高優質通過</button>
+                  <button class="btn btn-sm btn-seller" onclick="app.adminApproveProduct('${p.id}', false)"><i class="fa-solid fa-check"></i> 審核通過</button>
+                  <button class="btn btn-sm btn-outline text-danger" onclick="app.adminRejectProduct('${p.id}')"><i class="fa-solid fa-xmark"></i> 拒絕退回</button>
+                ` : `
+                  <span class="badge" style="padding: 6px 12px; font-weight: 700; border-radius: 4px; ${p.status === 'approved' ? 'background-color: var(--color-seller-light); color: var(--color-seller);' : 'background-color: #f3f4f6; color: #4b5563;'}">
+                    ${p.status === 'approved' ? '<i class="fa-solid fa-circle-check"></i> 已審核上架' : '已拒絕退回'}
+                  </span>
+                  ${p.status === 'approved' ? `<button class="btn btn-sm btn-outline text-danger" style="margin-left: 6px;" onclick="app.adminRejectProduct('${p.id}')">下架商品</button>` : ''}
+                `}
               </div>
             </div>
             <div class="pending-scenes-admin-grid">${scenesGridHtml}</div>

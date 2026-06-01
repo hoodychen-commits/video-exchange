@@ -80,6 +80,7 @@ body {
 .text-creator { color: var(--color-creator); }
 .text-seller { color: var(--color-seller); }
 .text-amber { color: var(--color-accent); }
+.text-danger { color: var(--color-danger); }
 .fw-bold { font-weight: 700; }
 .mt-2 { margin-top: 8px; }
 .mt-3 { margin-top: 16px; }
@@ -2531,5 +2532,76 @@ video.private-blur {
   
   .showcase-header h2 {
     font-size: 24px;
+  }
+}
+
+/* -----------------------------------------
+   CLOUD SYNC CONNECTION BANNER STYLES
+----------------------------------------- */
+.cloud-sync-banner {
+  background-color: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-light);
+  padding: 8px 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-main);
+  transition: var(--transition-smooth);
+}
+
+.banner-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.banner-status-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.banner-status-info i {
+  font-size: 16px;
+}
+
+.cloud-success {
+  background-color: #ecfdf5; /* Light emerald green */
+  border-bottom: 1px solid #a7f3d0;
+  color: #065f46;
+}
+
+.cloud-success .banner-status-info i {
+  color: #10b981;
+}
+
+.cloud-warning {
+  background-color: #fffbeb; /* Light amber yellow */
+  border-bottom: 1px solid #fde68a;
+  color: #92400e;
+}
+
+.cloud-warning .banner-status-info i {
+  color: #d97706;
+}
+
+.btn-outline-white {
+  background-color: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  color: #111827;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.btn-outline-white:hover {
+  background-color: #ffffff;
+  border-color: #111827;
+}
+
+@media (max-width: 576px) {
+  .banner-container {
+    justify-content: center;
+    text-align: center;
   }
 }

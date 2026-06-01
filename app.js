@@ -1794,7 +1794,8 @@ class AppEngine {
       return true; // Admin pays nothing
     }
 
-    if (this.currentUser.role !== 'seller') {
+    const hasSellerRole = this.currentUser.role === 'seller' || (this.currentUser.roles && this.currentUser.roles.includes('seller'));
+    if (!hasSellerRole) {
       alert("限帶貨主播會員下載分鏡影片！");
       return false;
     }

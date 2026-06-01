@@ -2023,8 +2023,10 @@ class AppEngine {
   deductCredits() {
     if (!this.currentUser) return false;
     
+    // Admin role check: Admin pays nothing and is NOT counted in downloads/royalties
     if (this.currentUser.role === 'admin') {
-      return true; // Admin pays nothing
+      this.triggerCloudSyncToast("管理員下載成功！(管理模式免扣點、免計入下載數)");
+      return true; 
     }
 
     const hasSellerRole = this.currentUser.role === 'seller' || (this.currentUser.roles && this.currentUser.roles.includes('seller'));
@@ -2070,8 +2072,15 @@ class AppEngine {
       }
     }
 
+    // Proactively refresh all UI stats and product lists instantly
     this.renderSellerStats();
     this.renderProducts();
+    this.renderCreatorStats();
+    this.renderCreatorProductsList();
+    if (typeof this.renderAdminProducts === 'function') {
+      this.renderAdminProducts();
+    }
+    
     this.triggerCloudSyncToast("扣點下載成功！分成已自動匯入創作者帳戶！");
     return true;
   }

@@ -561,7 +561,14 @@ class AppEngine {
     if (this.isCloudMode) {
       try {
         const { error } = await this.supabase.from('users').upsert(this.users);
-        if (error) console.error("Cloud users sync failed:", error.message);
+        if (error) {
+          console.error("Cloud users sync failed:", error.message);
+          if (error.message.includes("row-level security")) {
+            alert("⚠️ 雲端資料庫儲存失敗：已被行級安全防護 (RLS) 封鎖！\n請至 Supabase -> SQL Editor 運行『ALTER TABLE users DISABLE ROW LEVEL SECURITY;』來解鎖權限，否則資料無法同步！");
+          } else {
+            alert(`⚠️ 雲端資料庫同步失敗：${error.message}`);
+          }
+        }
       } catch (err) {
         console.error("Cloud users sync error:", err);
       }
@@ -573,7 +580,14 @@ class AppEngine {
     if (this.isCloudMode) {
       try {
         const { error } = await this.supabase.from('products').upsert(this.products);
-        if (error) console.error("Cloud products sync failed:", error.message);
+        if (error) {
+          console.error("Cloud products sync failed:", error.message);
+          if (error.message.includes("row-level security")) {
+            alert("⚠️ 雲端商品儲存失敗：已被行級安全防護 (RLS) 封鎖！\n請至 Supabase -> SQL Editor 運行『ALTER TABLE products DISABLE ROW LEVEL SECURITY;』來解鎖權限！");
+          } else {
+            alert(`⚠️ 商品資料同步失敗：${error.message}`);
+          }
+        }
       } catch (err) {
         console.error("Cloud products sync error:", err);
       }
@@ -585,7 +599,14 @@ class AppEngine {
     if (this.isCloudMode) {
       try {
         const { error } = await this.supabase.from('withdrawals').upsert(this.withdrawals);
-        if (error) console.error("Cloud withdrawals sync failed:", error.message);
+        if (error) {
+          console.error("Cloud withdrawals sync failed:", error.message);
+          if (error.message.includes("row-level security")) {
+            alert("⚠️ 雲端提領儲存失敗：已被行級安全防護 (RLS) 封鎖！\n請至 Supabase -> SQL Editor 運行『ALTER TABLE withdrawals DISABLE ROW LEVEL SECURITY;』來解鎖權限！");
+          } else {
+            alert(`⚠️ 提領紀錄同步失敗：${error.message}`);
+          }
+        }
       } catch (err) {
         console.error("Cloud withdrawals sync error:", err);
       }

@@ -2546,9 +2546,30 @@ class AppEngine {
     this.renderCreatorStats();
   }
 
-  adminDeleteUser(userId) {
+  async adminDeleteUser(userId) {
     if (!confirm("⚠️ 警告：確認要刪除此使用者帳戶？該操作無法復原。")) return;
 
+    // 1. If in Cloud Mode, explicitly delete the user row from Supabase Database first!
+    if (this.isCloudMode) {
+      try {
+        const { error } = await this.supabase
+          .from('users')
+          .delete()
+          .eq('id', userId);
+        
+        if (error) {
+          console.error("Failed to delete user from Supabase:", error.message);
+          alert(`⚠️ 雲端刪除失敗：${error.message}`);
+          return;
+        }
+      } catch (err) {
+        console.error("Supabase user delete error:", err);
+        alert(`⚠️ 雲端刪除出錯：${err.message || err}`);
+        return;
+      }
+    }
+
+    // 2. Perform local memory state filtering and save
     this.users = this.users.filter(x => x.id !== userId);
     this.saveUsers();
 

@@ -733,7 +733,7 @@ class AppEngine {
         desktopHtml += `
           <a class="nav-link ${this.activeView === 'creator' ? 'active' : ''}" onclick="app.navigate('creator')">創作者中心</a>
           ${hasDoubleRoles ? `<a class="nav-link text-amber" onclick="app.switchActiveRole()"><i class="fa-solid fa-arrows-rotate"></i> 切換為帶貨者</a>` : ''}
-          <a class="nav-link" href="https://line.me/R/ti/p/@yourlineid" target="_blank">LINE@ 客服</a>
+          <a class="nav-link" href="https://lin.ee/VN4zDFs" target="_blank">LINE@ 客服</a>
         `;
         mobileHtml += `
           <div class="mobile-nav-item ${this.activeView === 'creator' ? 'active-creator' : ''}" onclick="app.navigate('creator')">
@@ -745,7 +745,7 @@ class AppEngine {
             <i class="fa-solid fa-arrows-rotate" style="color:var(--color-accent);"></i>
             <span>切換身分</span>
           </div>` : ''}
-          <a class="mobile-nav-item" href="https://line.me/R/ti/p/@yourlineid" target="_blank" style="text-decoration:none;">
+          <a class="mobile-nav-item" href="https://lin.ee/VN4zDFs" target="_blank" style="text-decoration:none;">
             <i class="fa-brands fa-line" style="color:#06c755;"></i>
             <span>LINE客服</span>
           </a>

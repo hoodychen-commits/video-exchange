@@ -1134,6 +1134,82 @@ class AppEngine {
         }
       }
     }
+
+    // Render My Products List
+    this.renderCreatorProductsList();
+  }
+
+  renderCreatorProductsList() {
+    const listBody = document.getElementById('my-products-portfolio-list');
+    if (!listBody) return;
+
+    // Filter products belonging to this creator
+    const myProducts = this.products.filter(p => p.creator_id === this.currentUser.id);
+    
+    if (myProducts.length === 0) {
+      listBody.innerHTML = `
+        <tr>
+          <td colspan="6" class="text-center text-muted py-3">暫無上傳的商品素材，快去上方上傳您的第一部商品吧！</td>
+        </tr>
+      `;
+      return;
+    }
+
+    // Sort products by date descending (newest first)
+    myProducts.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+
+    let html = '';
+    myProducts.forEach(p => {
+      // Calculate scene count
+      let sceneCount = 0;
+      if (p.scenes) {
+        sceneCount = Object.values(p.scenes).reduce((acc, list) => acc + (list ? list.length : 0), 0);
+      } else {
+        sceneCount = p.video_url ? 1 : 0;
+      }
+
+      // Status badge
+      let statusHtml = '';
+      if (p.status === 'pending') {
+        statusHtml = `<span class="badge bg-amber"><i class="fa-solid fa-spinner fa-spin"></i> 待審核</span>`;
+      } else if (p.status === 'approved') {
+        statusHtml = `<span class="badge bg-creator"><i class="fa-solid fa-circle-check"></i> 已上架</span>`;
+        if (p.is_quality) {
+          statusHtml += ` <span class="badge bg-gold" style="background:#d97706; color:#ffffff;"><i class="fa-solid fa-gem"></i> 高品質</span>`;
+        }
+      } else if (p.status === 'rejected') {
+        statusHtml = `<span class="badge bg-danger"><i class="fa-solid fa-circle-xmark"></i> 未通過</span>`;
+      }
+
+      // Format date
+      let dateStr = '暫無紀錄';
+      if (p.created_at) {
+        const d = new Date(p.created_at);
+        dateStr = `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+      }
+
+      // Cover photo
+      const coverPhoto = p.photo_url || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=80&h=80&q=80';
+
+      html += `
+        <tr>
+          <td style="padding: 12px 8px;">
+            <img src="${coverPhoto}" alt="${p.name}" style="width: 44px; height: 44px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border-color);">
+          </td>
+          <td class="fw-bold text-dark" style="padding: 12px 8px; vertical-align: middle;">${p.name}</td>
+          <td style="padding: 12px 8px; vertical-align: middle;"><span class="badge bg-light text-dark" style="font-size: 11px;">${sceneCount} 個分鏡</span></td>
+          <td style="padding: 12px 8px; vertical-align: middle;">${statusHtml}</td>
+          <td style="padding: 12px 8px; vertical-align: middle;">
+            <span style="font-size: 14px; font-weight: 700; color: var(--color-seller);">
+              <i class="fa-solid fa-download"></i> ${p.downloads_count || 0} 次
+            </span>
+          </td>
+          <td class="text-muted" style="padding: 12px 8px; vertical-align: middle; font-size: 11px;">${dateStr}</td>
+        </tr>
+      `;
+    });
+
+    listBody.innerHTML = html;
   }
 
   recalculateCreatorLevel() {

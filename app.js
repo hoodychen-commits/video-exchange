@@ -40,8 +40,8 @@ class AppEngine {
 
     // Supabase config hooks (can be set up directly in production)
     this.supabaseConfig = {
-      url: "https://your-supabase-project.supabase.co",
-      anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.your-key-here"
+      url: "https://nxeqgrxyupcvtsskkdow.supabase.co",
+      anonKey: "sb_publishable_2W-eTgq4sFJXjKNzRIrByQ_SYnu3KUk"
     };
 
     this.init();

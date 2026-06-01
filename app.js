@@ -1890,6 +1890,211 @@ class AppEngine {
     this.closeProductDetailModal();
   }
 
+  async smartMergeRandomScenes() {
+    const checkboxes = document.querySelectorAll('input[name="scene-chk"]');
+    if (checkboxes.length === 0) {
+      alert("本商品無可用影片素材，無法進行合成！");
+      return;
+    }
+
+    // Deduct 5 points
+    if (!this.deductCredits()) return;
+
+    // Pick up to 5 random scenes
+    const allUrls = Array.from(checkboxes).map(chk => chk.value);
+    
+    // Shuffle helper
+    const shuffled = allUrls.sort(() => 0.5 - Math.random());
+    const selectedUrls = shuffled.slice(0, Math.min(5, allUrls.length));
+
+    alert(`🎉 成功扣除 5 積分！系統即將啟動 AI 合成引擎，為您挑選 ${selectedUrls.length} 個隨機分鏡拼接為一段影片！\n請勿關閉視窗，稍候合成完畢後將自動下載檔案。`);
+
+    const productName = document.getElementById('modal-product-name')?.innerText || '極致素材';
+    
+    await this.mergeAndDownloadVideos(selectedUrls, productName);
+    
+    this.closeProductDetailModal();
+  }
+
+  async mergeAndDownloadVideos(videoUrls, productName) {
+    // Generate custom processing modal dynamically
+    const progressOverlay = document.createElement('div');
+    progressOverlay.className = 'screen-guard-overlay'; // Reuse nice guard styling
+    progressOverlay.id = 'video-merge-overlay';
+    progressOverlay.style.zIndex = '10001';
+    progressOverlay.innerHTML = `
+      <div class="guard-content" style="max-width: 460px; background: rgba(255, 255, 255, 0.95); padding: 32px; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); backdrop-filter: blur(20px);">
+        <div style="font-size: 50px; margin-bottom: 16px;">🎬</div>
+        <h3 style="margin: 0 0 8px 0; font-size: 20px; font-weight: 800; color: #1e293b;">AI 影片拼接合成中</h3>
+        <p style="margin: 0 0 20px 0; font-size: 13px; color: #64748b; line-height: 1.6;" id="merge-status-text">正在初始化合成引擎，載入分鏡素材影片...</p>
+        
+        <!-- Progress Bar -->
+        <div style="width: 100%; background: #e2e8f0; height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 12px; position: relative;">
+          <div id="merge-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(135deg, var(--color-seller) 0%, #059669 100%); transition: width 0.3s ease;"></div>
+        </div>
+        <div style="display: flex; justify-content: space-between; font-size: 11px; color: #94a3b8; font-weight: 600; width: 100%;">
+          <span id="merge-progress-percent">0%</span>
+          <span id="merge-estimated-time">預估剩餘時間: 計算中...</span>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(progressOverlay);
+
+    const statusText = document.getElementById('merge-status-text');
+    const progressBar = document.getElementById('merge-progress-bar');
+    const progressPercent = document.getElementById('merge-progress-percent');
+    const estimatedTime = document.getElementById('merge-estimated-time');
+
+    // Status updates
+    const statuses = [
+      "正在讀取高畫質分鏡影片...",
+      "正在啟動瀏覽器硬體加速渲染...",
+      "正在無縫拼接分鏡影格資訊...",
+      "正在即時封裝為 MP4 視訊流...",
+      "即將完成，準備匯出檔案..."
+    ];
+    let statusIdx = 0;
+    const statusTimer = setInterval(() => {
+      if (statusIdx < statuses.length - 1) {
+        statusIdx++;
+        statusText.innerText = statuses[statusIdx];
+      }
+    }, 3000);
+
+    try {
+      // Setup offscreen video and canvas elements
+      const video = document.createElement('video');
+      video.muted = true;
+      video.playsInline = true;
+      video.crossOrigin = "anonymous"; // Avoid canvas tainted security error
+      
+      // We must wait for the first video to load metadata to get dimensions
+      statusText.innerText = "正在分析分鏡影片規格...";
+      video.src = videoUrls[0];
+      await new Promise((resolve, reject) => {
+        video.onloadedmetadata = resolve;
+        video.onerror = () => reject(new Error("無法載入影片素材規格"));
+      });
+
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 720;
+      canvas.height = video.videoHeight || 1280;
+      const ctx = canvas.getContext('2d');
+
+      // MediaRecorder setup
+      let mimeType = 'video/webm;codecs=vp9';
+      if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1')) {
+        mimeType = 'video/mp4;codecs=avc1';
+      } else if (MediaRecorder.isTypeSupported('video/mp4')) {
+        mimeType = 'video/mp4';
+      } else if (MediaRecorder.isTypeSupported('video/webm;codecs=h264')) {
+        mimeType = 'video/webm;codecs=h264';
+      } else if (MediaRecorder.isTypeSupported('video/webm')) {
+        mimeType = 'video/webm';
+      }
+
+      const recordedChunks = [];
+      const fps = 30;
+      const stream = canvas.captureStream(fps);
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          recordedChunks.push(e.data);
+        }
+      };
+
+      let recorderPromise = new Promise((resolve) => {
+        mediaRecorder.onstop = resolve;
+      });
+
+      mediaRecorder.start();
+
+      // Play and record each video sequentially
+      const totalVideos = videoUrls.length;
+      const playbackRate = 1.2; // 1.2x speed to make processing faster while maintaining frame rate
+
+      for (let i = 0; i < totalVideos; i++) {
+        const url = videoUrls[i];
+        statusText.innerText = `正在合成第 ${i + 1}/${totalVideos} 個分鏡影片...`;
+        
+        // Load video
+        video.src = url;
+        await new Promise((resolve, reject) => {
+          video.oncanplaythrough = resolve;
+          video.onerror = () => reject(new Error(`第 ${i + 1} 個分鏡影片載入失敗`));
+        });
+
+        // Play video
+        video.playbackRate = playbackRate;
+        video.play();
+
+        const duration = video.duration || 5; // fallback
+        const estTimeRemaining = Math.ceil(((totalVideos - i) * duration) / playbackRate);
+        estimatedTime.innerText = `預估剩餘時間: ${estTimeRemaining} 秒`;
+
+        // Render loop
+        await new Promise((resolve) => {
+          function renderFrame() {
+            if (video.paused || video.ended) {
+              resolve();
+              return;
+            }
+            // Draw video to canvas
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // Progress update
+            const currentProgress = ((i + (video.currentTime / duration)) / totalVideos) * 100;
+            progressBar.style.width = `${currentProgress}%`;
+            progressPercent.innerText = `${Math.min(Math.round(currentProgress), 99)}%`;
+
+            requestAnimationFrame(renderFrame);
+          }
+          
+          video.onplay = () => {
+            requestAnimationFrame(renderFrame);
+          };
+          video.onended = resolve;
+        });
+      }
+
+      // Complete recording
+      statusText.innerText = "合成已完成！正在打包並匯出高品質影片檔案...";
+      progressBar.style.width = "100%";
+      progressPercent.innerText = "100%";
+      estimatedTime.innerText = "剩餘時間: 即將完成";
+      
+      mediaRecorder.stop();
+      await recorderPromise;
+
+      // Save/Download blob
+      const extension = mimeType.includes('mp4') ? 'mp4' : 'webm';
+      const blob = new Blob(recordedChunks, { type: mimeType });
+      const downloadUrl = URL.createObjectURL(blob);
+      
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = `${productName}_AI隨機合成影片.${extension}`;
+      document.body.appendChild(a);
+      a.click();
+      
+      setTimeout(() => {
+        a.remove();
+        URL.revokeObjectURL(downloadUrl);
+      }, 1000);
+
+      // Show success alert
+      alert(`🎉 影片合成下載成功！\n已成功將 ${totalVideos} 個分鏡無縫拼接並下載到您的裝置。`);
+
+    } catch (err) {
+      console.error("Video merge error:", err);
+      alert(`⚠️ 影片合成失敗：${err.message || err}\n請確認您的網路連線或嘗試單獨下載分鏡影片。`);
+    } finally {
+      clearInterval(statusTimer);
+      if (progressOverlay) progressOverlay.remove();
+    }
+  }
+
   async triggerBrowserDownload(url, filename) {
     // 1. If it's a Supabase URL, append '?download=' to force Content-Disposition attachment header on server-side
     if (url.includes('supabase') && !url.includes('download=')) {

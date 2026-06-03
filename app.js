@@ -1877,6 +1877,7 @@ class AppEngine {
   previewProductPhoto(event) {
     const file = event.target.files[0];
     if (file) {
+      this.selectedCoverPhoto = file;
       const reader = new FileReader();
       reader.onload = (e) => {
         const preview = document.getElementById('photo-preview');
@@ -1970,9 +1971,9 @@ class AppEngine {
 
       if (this.isCloudMode) {
         // 1. Upload Cover photo to Supabase Storage
-        if (photoInput.files && photoInput.files[0]) {
-          const photoFile = photoInput.files[0];
-          const photoExt = photoFile.name.split('.').pop();
+        if (this.selectedCoverPhoto) {
+          const photoFile = this.selectedCoverPhoto;
+          const photoExt = photoFile.name.split('.').pop() || 'jpg';
           const photoPath = `cover_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${photoExt}`;
           
           const { error: photoErr } = await this.supabase.storage
@@ -2080,6 +2081,7 @@ class AppEngine {
       usage: [],
       other: []
     };
+    this.selectedCoverPhoto = null;
 
     const scenes = ['unboxing', 'display', 'effect', 'detail', 'usage', 'other'];
     scenes.forEach(sc => {
@@ -2683,23 +2685,7 @@ class AppEngine {
       alert("請至少勾選一部影片分鏡進行下載！");
       return;
     }
-
-    // Deduct 5 points
-    if (!this.deductCredits()) return;
-
-    // Show indicator
-    alert(`🎉 成功扣除 5 積分！系統即將為您打包下載所選的 ${checkboxes.length} 個分鏡影片。\n若瀏覽器彈出「允許下載多個檔案」提示，請務必點選「允許」！`);
-
-    for (let i = 0; i < checkboxes.length; i++) {
-      const url = checkboxes[i].value;
-      if (i > 0) {
-        // 1-second delay so browser doesn't block bulk downloads
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-      this.triggerBrowserDownload(url, `scene_material_${i + 1}.mp4`);
-    }
-
-    this.closeProductDetailModal();
+    this.processBulkDownload(checkboxes);
   }
 
   async downloadAllScenes() {
@@ -2708,24 +2694,66 @@ class AppEngine {
       alert("本商品無可用影片素材。");
       return;
     }
-
-    // Deduct 5 points
-    if (!this.deductCredits()) return;
-
-    alert(`🎉 成功扣除 5 積分！系統即將為您打包下載此商品之全部 ${checkboxes.length} 個分鏡素材！\n若瀏覽器彈出「允許下載多個檔案」提示，請務必點選「允許」！`);
-
-    for (let i = 0; i < checkboxes.length; i++) {
-      const url = checkboxes[i].value;
-      if (i > 0) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-      this.triggerBrowserDownload(url, `scene_complete_material_${i + 1}.mp4`);
-    }
-
-    this.closeProductDetailModal();
+    this.processBulkDownload(checkboxes);
   }
 
-  async triggerBrowserDownload(url, filename) {
+  async processBulkDownload(checkboxes) {
+    if (!this.deductCredits()) return;
+    
+    // Add loading indicator on buttons
+    const btnDownSel = document.getElementById('btn-download-selected');
+    const btnDownAll = document.getElementById('btn-download-all');
+    const origSelHtml = btnDownSel ? btnDownSel.innerHTML : '';
+    const origAllHtml = btnDownAll ? btnDownAll.innerHTML : '';
+    if (btnDownSel) { btnDownSel.disabled = true; btnDownSel.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 準備影片中...'; }
+    if (btnDownAll) { btnDownAll.disabled = true; btnDownAll.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 準備影片中...'; }
+
+    try {
+      // Check if we can use Web Share API with multiple files
+      if (navigator.canShare && navigator.share) {
+        try {
+          const filesToShare = [];
+          for (let i = 0; i < checkboxes.length; i++) {
+            const url = checkboxes[i].value;
+            const response = await fetch(url);
+            const blob = await response.blob();
+            const file = new File([blob], `scene_${i+1}.mp4`, { type: blob.type || 'video/mp4' });
+            filesToShare.push(file);
+          }
+          
+          if (navigator.canShare({ files: filesToShare })) {
+            await navigator.share({
+              files: filesToShare,
+              title: '素材影片下載',
+              text: `共 ${checkboxes.length} 部影片，請選擇「儲存影片」或分享至LINE`
+            });
+            this.closeProductDetailModal();
+            return;
+          }
+        } catch (err) {
+          console.warn("Bulk share failed or cancelled, falling back to individual download:", err);
+          if (err.name === 'AbortError') {
+             // User cancelled, do not fallback
+             return;
+          }
+        }
+      }
+      
+      // Fallback for PC or if Share fails
+      alert(`🎉 成功扣除 5 積分！系統即將為您打包下載 ${checkboxes.length} 個分鏡素材！\n若瀏覽器彈出「允許下載多個檔案」提示，請務必點選「允許」！`);
+      for (let i = 0; i < checkboxes.length; i++) {
+        const url = checkboxes[i].value;
+        if (i > 0) await new Promise(resolve => setTimeout(resolve, 1000));
+        this.triggerBrowserDownload(url, `scene_${i+1}.mp4`, true);
+      }
+      this.closeProductDetailModal();
+    } finally {
+      if (btnDownSel) { btnDownSel.disabled = false; btnDownSel.innerHTML = origSelHtml; }
+      if (btnDownAll) { btnDownAll.disabled = false; btnDownAll.innerHTML = origAllHtml; }
+    }
+  }
+
+  async triggerBrowserDownload(url, filename, skipShare = false) {
     // 1. If it's a Supabase URL, append '?download=' to force Content-Disposition attachment header on server-side
     if (url.includes('supabase') && !url.includes('download=')) {
       url = url.includes('?') ? `${url}&download=` : `${url}?download=`;
@@ -2741,7 +2769,7 @@ class AppEngine {
         const blob = await response.blob();
         
         // Use Web Share API if available (Great for iOS 'Save Video' to album)
-        if (navigator.canShare && navigator.share) {
+        if (!skipShare && navigator.canShare && navigator.share) {
           try {
             const file = new File([blob], filename, { type: blob.type || 'video/mp4' });
             if (navigator.canShare({ files: [file] })) {

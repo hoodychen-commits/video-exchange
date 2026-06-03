@@ -362,10 +362,16 @@ class AppEngine {
     // 2. Easter Egg Double Clicks Detection (5 clicks on logo/title within 3 seconds)
     let clickCount = 0;
     let lastClickTime = 0;
+    let lastTriggerTime = 0;
     const titleEl = document.getElementById('main-title-logo');
     if (titleEl) {
-      titleEl.addEventListener('click', () => {
+      const handleSecretClick = (e) => {
         const currentTime = new Date().getTime();
+        if (currentTime - lastTriggerTime < 200) {
+          return;
+        }
+        lastTriggerTime = currentTime;
+
         if (currentTime - lastClickTime < 3000) {
           clickCount++;
         } else {
@@ -375,9 +381,12 @@ class AppEngine {
 
         if (clickCount >= 5) {
           clickCount = 0; // reset
+          if (e && typeof e.preventDefault === 'function') e.preventDefault();
           this.openAdminSecureModal();
         }
-      });
+      };
+      titleEl.addEventListener('click', handleSecretClick);
+      titleEl.addEventListener('touchstart', handleSecretClick, { passive: true });
     }
   }
 
@@ -1958,8 +1967,8 @@ class AppEngine {
     const user = document.getElementById('bank-user').value.trim();
     const account = document.getElementById('bank-account-num').value.trim();
 
-    if (!name || !user || !account) {
-      alert("請填寫完整的銀行代碼名稱、戶名及帳號！");
+    if (!name || !branch || !user || !account) {
+      alert("請填寫完整的銀行代碼名稱、分行名稱、戶名及帳號！");
       return;
     }
 
@@ -2339,14 +2348,14 @@ class AppEngine {
       return;
     }
 
-    const infoText = `【💰 線下匯款加值引導】\n\n您已選擇儲值方案：TWD $${amount.toLocaleString()} 元\n可兌換積分點數：${(amount + bonus).toLocaleString()} 點 (含額外贈點)\n\n請將款項匯至以下平台專用帳戶：\n- 銀行：822 中國信託商業銀行 (敦北分行)\n- 戶名：陳阿明\n- 帳號：123-45678-901\n\n匯款完成後，請至 LINE 客服提供您的「註冊手機號碼」與「匯款帳號後五碼」，管理員核對無誤後會立即為您後台人工開通加點！\n\n點擊「確認」將為您複製匯款明細並自動跳轉至 LINE@ 客服聯絡視窗！`;
+    const infoText = `【💰 點數加值引導】\n\n您已選擇儲值方案：TWD $${amount.toLocaleString()} 元\n可兌換積分點數：${(amount + bonus).toLocaleString()} 點 (含額外贈點)\n\n目前本平台儲值統一採用 LINE 官方客服協助開通。\n\n點擊「確認」將為您複製加值方案資訊，並自動跳轉至 LINE@ 客服聯絡視窗，請直接向客服人員索取匯款資訊並開通點數！`;
 
     if (confirm(infoText)) {
       // Auto-copy details for the user
-      const copyText = `【匯款開通點數通知】\n匯款金額：TWD $${amount} 元\n兌換點數：${amount + bonus} 點\n註冊電話：${this.currentUser.phone || '未提供'}\n匯款後五碼：(請在此填寫您的帳號後五碼)\n\n平台帳戶：\n銀行：中國信託 (822)\n戶名：陳阿明\n帳號：123-45678-901`;
+      const copyText = `【申請加值點數通知】\n加值方案：TWD $${amount} 元\n兌換點數：${amount + bonus} 點\n註冊電話：${this.currentUser.phone || '未提供'}\n\n(請傳送此訊息給客服人員以索取匯款帳號開通)`;
       
       navigator.clipboard.writeText(copyText).then(() => {
-        this.triggerCloudSyncToast("匯款資訊已複製！請至 LINE 直接貼上發送！");
+        this.triggerCloudSyncToast("加值資訊已複製！請至 LINE 直接貼上發送！");
       }).catch(err => {
         console.warn("Clipboard copy failed, fallback logic used:", err);
       });

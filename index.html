@@ -559,20 +559,20 @@
               <div class="bank-config-box">
                 <h4>綁定收款銀行帳戶</h4>
                 <div class="form-group">
-                  <label>銀行代碼與名稱</label>
-                  <input type="text" id="bank-name" placeholder="例如: 822 中國信託銀行">
+                  <label class="required-lbl">銀行代碼與名稱</label>
+                  <input type="text" id="bank-name" placeholder="例如: 822 中國信託銀行" required>
                 </div>
                 <div class="form-group">
-                  <label>分行名稱</label>
-                  <input type="text" id="bank-branch" placeholder="例如: 敦北分行 (非必填)">
+                  <label class="required-lbl">分行名稱</label>
+                  <input type="text" id="bank-branch" placeholder="例如: 敦北分行" required>
                 </div>
                 <div class="form-group">
-                  <label>戶名</label>
-                  <input type="text" id="bank-user" placeholder="必須與身份證姓名相符">
+                  <label class="required-lbl">戶名</label>
+                  <input type="text" id="bank-user" placeholder="必須與身份證姓名相符" required>
                 </div>
                 <div class="form-group">
-                  <label>銀行帳號</label>
-                  <input type="text" id="bank-account-num" placeholder="請輸入純數字銀行帳號">
+                  <label class="required-lbl">銀行帳號</label>
+                  <input type="text" id="bank-account-num" placeholder="請輸入純數字銀行帳號" required>
                 </div>
                 <button class="btn btn-outline w-100" onclick="app.saveBankInfo()"><i class="fa-solid fa-floppy-disk"></i> 儲存銀行綁定</button>
               </div>
@@ -832,6 +832,27 @@
         </div>
       </div>
 
+      <!-- Seller Leaderboard Cards (置頂熱門排行) -->
+      <div class="seller-trends-grid mt-4">
+        <!-- Creators Leaderboard -->
+        <div class="card trend-sidebar-card">
+          <h3><i class="fa-solid fa-users text-seller"></i> 熱門帶貨創作者</h3>
+          <p class="section-desc">上傳分鏡質量最高、受帶貨者青睞的創作者：</p>
+          <div class="trend-list" id="seller-trending-creators">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+
+        <!-- Products Leaderboard -->
+        <div class="card trend-sidebar-card">
+          <h3><i class="fa-solid fa-arrow-trend-up text-seller"></i> 熱門商品下載榜</h3>
+          <p class="section-desc">近期被打包下載次數最多的熱門商品素材：</p>
+          <div class="trend-list" id="seller-trending-products">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+      </div>
+
       <div class="seller-main-layout">
         <!-- Products Grid Area -->
         <div class="products-container">
@@ -853,27 +874,6 @@
             <!-- Dynamic product cards rendered by JS -->
           </div>
         </div>
-
-        <!-- Sidebar for Popular trends -->
-        <aside class="seller-sidebar">
-          <!-- Popular creators of the week -->
-          <div class="card trend-sidebar-card">
-            <h3><i class="fa-solid fa-users text-seller"></i> 熱門帶貨創作者</h3>
-            <p class="section-desc">上傳分鏡質量最高、受帶貨者青睞的創作者：</p>
-            <div class="trend-list" id="seller-trending-creators">
-              <!-- Rendered by JS -->
-            </div>
-          </div>
-
-          <!-- Popular Downloads -->
-          <div class="card trend-sidebar-card">
-            <h3><i class="fa-solid fa-arrow-trend-up text-seller"></i> 熱門商品下載榜</h3>
-            <p class="section-desc">近期被打包下載次數最多的熱門商品素材：</p>
-            <div class="trend-list" id="seller-trending-products">
-              <!-- Rendered by JS -->
-            </div>
-          </div>
-        </aside>
       </div>
 
       <!-- Seller Detailed Tutorial Section -->
@@ -1119,14 +1119,9 @@
             <i class="fa-solid fa-building-columns text-seller"></i> 線下手動匯款加值說明
           </div>
           <div class="offline-payment-body">
-            <p style="font-size: 0.9rem; line-height: 1.5; color: var(--text-muted); margin-bottom: 8px;">目前本平台點數加值統一採用<strong>「線下匯款，後台手動開通」</strong>模式。請選擇上方方案，並將款項匯至以下平台專用帳戶：</p>
-            <div class="bank-details-card">
-              <div><strong>收款銀行：</strong>822 中國信託商業銀行 (敦北分行)</div>
-              <div><strong>收款戶名：</strong>陳阿明</div>
-              <div><strong>收款帳號：</strong>123-45678-901 (示範帳號)</div>
-            </div>
+            <p style="font-size: 0.9rem; line-height: 1.5; color: var(--text-muted); margin-bottom: 8px;">目前本平台點數加值統一採用<strong>「聯繫 LINE@ 客服開通」</strong>模式。請選擇上方方案，並點擊下方按鈕聯絡客服人員，將有專人為您辦理儲值與開通點數！</p>
             <p class="mt-2 text-danger" style="font-size: 0.85rem; line-height: 1.5; font-weight: 700; margin-bottom: 0;">
-              <i class="fa-solid fa-circle-exclamation"></i> 匯款完成後，請點選下方按鈕聯絡 LINE@ 客服，並提供您的「註冊手機號碼」與「匯款帳號後五碼」，管理員核對後會立即為您在後台手動加點！
+              <i class="fa-solid fa-circle-exclamation"></i> 儲值完畢或有任何點數加值疑問，請點選下方按鈕聯絡 LINE@ 客服，客服人員核對後會立即為您在後台手動加點！
             </p>
           </div>
           <div class="offline-payment-actions mt-3">
@@ -1213,11 +1208,7 @@
             <input type="tel" id="login-phone" placeholder="請輸入註冊的電話號碼 (如: 0912345678)" required>
           </div>
           <button type="submit" class="btn btn-primary w-100 btn-lg mt-3">一鍵登入</button>
-          <div class="text-center mt-4 pt-2" style="border-top: 1px dashed var(--border-light);">
-            <span style="font-size: 13px; color: var(--text-muted); cursor: pointer; transition: var(--transition-smooth);" onmouseover="this.style.color='var(--color-danger)'" onmouseout="this.style.color='var(--text-muted)'" onclick="app.openAdminSecureModal()">
-              <i class="fa-solid fa-user-shield"></i> 管理員登入通道
-            </span>
-          </div>
+
         </form>
       </div>
     </div>

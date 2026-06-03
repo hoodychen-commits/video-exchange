@@ -578,8 +578,8 @@ class AppEngine {
         }
 
         // Load products from Supabase
-        // CRITICAL: Always merge with localStorage data to preserve scenes/videos that
-        // Supabase may not have stored (e.g., if scenes JSONB column is missing from schema).
+        // CRITICAL: Always merge with localStorage AND in-memory data to preserve scenes/videos
+        // that Supabase may not have stored (e.g., if scenes JSONB column is missing from schema).
         const localProductsStr = localStorage.getItem('app_products');
         const localProductsMap = {};
         if (localProductsStr) {
@@ -589,30 +589,49 @@ class AppEngine {
             });
           } catch(e) {}
         }
+        // Also build a map of current in-memory products (most up-to-date source of truth for scenes)
+        const inMemoryProductsMap = {};
+        if (this.products && Array.isArray(this.products)) {
+          this.products.forEach(mp => {
+            if (mp && mp.id) inMemoryProductsMap[mp.id] = mp;
+          });
+        }
 
         let { data: dbProducts, error: pErr } = await this.supabase.from('products').select('*');
         if (!pErr) {
           this.products = (dbProducts || []).map(p => {
             if (p) {
-              // Try to recover scenes from localStorage if cloud has none
-              const localVersion = localProductsMap[p.id];
+              // Check if cloud actually has scenes data
               let cloudHasScenes = false;
               if (p.scenes && typeof p.scenes === 'object') {
                 for (const k in p.scenes) {
                   if (p.scenes[k] && p.scenes[k].length > 0) { cloudHasScenes = true; break; }
                 }
               }
-              if (!cloudHasScenes && localVersion) {
-                // Cloud lost scenes data — restore from localStorage backup
-                p.scenes = localVersion.scenes || {};
-                if (!p.video_url && localVersion.video_url) p.video_url = localVersion.video_url;
-                console.log(`Restored scenes for product "${p.name}" from localStorage backup.`);
+              if (!cloudHasScenes) {
+                // Cloud lost scenes data — restore from in-memory first (most fresh), then localStorage backup
+                const memVersion = inMemoryProductsMap[p.id];
+                const localVersion = localProductsMap[p.id];
+                const bestSource = memVersion || localVersion;
+                if (bestSource) {
+                  p.scenes = bestSource.scenes || {};
+                  if (!p.video_url && bestSource.video_url) p.video_url = bestSource.video_url;
+                  console.log(`Restored scenes for product "${p.name}" from ${memVersion ? 'in-memory' : 'localStorage'} backup.`);
+                }
               }
               if (!p.scenes || typeof p.scenes !== 'object') p.scenes = {};
               if (!p.status) p.status = 'pending';
             }
             return p;
           }).filter(p => p !== null);
+
+          // Also include any in-memory products that don't exist in the cloud yet
+          // (e.g., just uploaded but cloud hasn't synced)
+          for (const id in inMemoryProductsMap) {
+            if (!this.products.find(p => p.id === id)) {
+              this.products.push(inMemoryProductsMap[id]);
+            }
+          }
         } else {
           // If cloud fetch failed entirely, fall back to localStorage products
           console.warn('Failed to fetch products from Supabase, using localStorage products:', pErr.message);
@@ -1445,9 +1464,31 @@ class AppEngine {
       return;
     }
 
-    // Pull latest data in Cloud Mode to avoid duplicate registration
+    // Pull latest USERS data in Cloud Mode to avoid duplicate registration
+    // IMPORTANT: Do NOT call full loadState() here — it would re-fetch products from
+    // Supabase which may lack scenes data, overwriting valid in-memory video URLs.
     if (this.isCloudMode) {
-      await this.loadState();
+      try {
+        let { data: dbUsers, error: uErr } = await this.supabase.from('users').select('*');
+        if (!uErr && dbUsers) {
+          dbUsers.forEach(dbU => {
+            if (dbU) {
+              if (dbU.passwordhash && !dbU.passwordHash) dbU.passwordHash = dbU.passwordhash;
+              if (dbU.passwordHash && !dbU.passwordhash) dbU.passwordhash = dbU.passwordHash;
+              if (!dbU.roles) dbU.roles = [dbU.role || 'creator'];
+              if (!dbU.role) dbU.role = dbU.roles[0];
+            }
+            const idx = this.users.findIndex(u => u.id === dbU.id);
+            if (idx >= 0) {
+              this.users[idx] = Object.assign({}, this.users[idx], dbU);
+            } else {
+              this.users.push(dbU);
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('User sync on register failed (non-critical):', e.message);
+      }
     }
 
     // Check if phone number is taken
@@ -1500,9 +1541,31 @@ class AppEngine {
       return;
     }
 
-    // Pull latest data in Cloud Mode
+    // Pull latest USERS data in Cloud Mode
+    // IMPORTANT: Do NOT call full loadState() here — it would re-fetch products from
+    // Supabase which may lack scenes data, overwriting valid in-memory video URLs.
     if (this.isCloudMode) {
-      await this.loadState();
+      try {
+        let { data: dbUsers, error: uErr } = await this.supabase.from('users').select('*');
+        if (!uErr && dbUsers) {
+          dbUsers.forEach(dbU => {
+            if (dbU) {
+              if (dbU.passwordhash && !dbU.passwordHash) dbU.passwordHash = dbU.passwordhash;
+              if (dbU.passwordHash && !dbU.passwordhash) dbU.passwordhash = dbU.passwordHash;
+              if (!dbU.roles) dbU.roles = [dbU.role || 'creator'];
+              if (!dbU.role) dbU.role = dbU.roles[0];
+            }
+            const idx = this.users.findIndex(u => u.id === dbU.id);
+            if (idx >= 0) {
+              this.users[idx] = Object.assign({}, this.users[idx], dbU);
+            } else {
+              this.users.push(dbU);
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('User sync on login failed (non-critical):', e.message);
+      }
     }
 
     const user = this.users.find(u => u.phone === phone);

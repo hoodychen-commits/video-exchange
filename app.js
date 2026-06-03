@@ -570,7 +570,7 @@ class AppEngine {
         });
 
         // If admin user is not found, automatically insert it
-        const admin = this.users.find(u => u.id === 'c01f6ec0-e251-4b13-9876-000000000003' || u.id === 'usr_admin');
+        const admin = this.users.find(u => u.role === 'admin' || (u.roles && u.roles.includes('admin')) || u.name === '超級管理員');
         if (!admin) {
           const defaultAdmin = {
             id: "c01f6ec0-e251-4b13-9876-000000000003",

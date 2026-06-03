@@ -484,6 +484,10 @@ class AppEngine {
         // Load users from Supabase
         let { data: dbUsers, error: uErr } = await this.supabase.from('users').select('*');
         if (uErr) throw uErr;
+        // Load local fallback for dual-role users
+        const localUsersStr = localStorage.getItem('app_users');
+        const localUsersFallback = localUsersStr ? JSON.parse(localUsersStr) : [];
+
         this.users = (dbUsers || []).map(u => {
           if (u) {
             if (!u.roles) {
@@ -494,15 +498,18 @@ class AppEngine {
             }
             const isSeller = u.role === 'seller' || u.roles.includes('seller');
             const isCreator = u.role === 'creator' || u.roles.includes('creator');
-            // DB has no seller_credits column — balance is the backing store for seller points
-            // Always read seller_credits from balance for sellers
+            
             if (isSeller) {
-              u.seller_credits = Number(u.balance) || 0;
-              // Clear balance for pure sellers to avoid UI confusion
               if (!isCreator) {
+                // Pure seller: read from balance
+                u.seller_credits = Number(u.balance) || 0;
                 u.balance = 0;
+              } else {
+                // Dual role: fetch from local storage backup
+                const localMatch = localUsersFallback.find(lu => lu.id === u.id);
+                u.seller_credits = localMatch ? (Number(localMatch.seller_credits) || 0) : 0;
               }
-            } else if (!isSeller) {
+            } else {
               // Non-sellers: seller_credits should be 0
               u.seller_credits = 0;
             }
@@ -2991,11 +2998,10 @@ class AppEngine {
           modifyButtonsHtml += `
             <div style="display:flex; flex-direction:column; gap:4px; border:1px solid rgba(16,185,129,0.2); padding:6px; border-radius:4px; background:rgba(16,185,129,0.02); min-width:180px;">
               <span style="font-size:10px; font-weight:700; color:var(--color-seller);">[管理主播積分]</span>
-              <div style="display:flex; gap:4px; flex-wrap:wrap;">
-                <button class="btn btn-sm btn-outline" style="padding:2px 6px; font-size:11px; height:auto;" onclick="app.adminModifyUserCredits('${u.id}', 100, 'credits')">+100 點</button>
-                <button class="btn btn-sm btn-outline" style="padding:2px 6px; font-size:11px; height:auto;" onclick="app.adminModifyUserCredits('${u.id}', 1000, 'credits')">+1000 點</button>
-                <button class="btn btn-sm btn-outline text-danger" style="padding:2px 6px; font-size:11px; height:auto; border-color:rgba(239,68,68,0.2);" onclick="app.adminModifyUserCredits('${u.id}', -100, 'credits')">-100 點</button>
-                <button class="btn btn-sm btn-outline text-danger" style="padding:2px 6px; font-size:11px; height:auto; border-color:rgba(239,68,68,0.2);" onclick="app.adminModifyUserCredits('${u.id}', -1000, 'credits')">-1000 點</button>
+              <div style="display:flex; gap:4px; flex-wrap:wrap; align-items:center;">
+                <input type="number" id="admin-credits-input-${u.id}" class="form-control" style="padding:2px 6px; font-size:12px; height:26px; width:70px;" placeholder="數量">
+                <button class="btn btn-sm btn-seller" style="padding:2px 8px; font-size:11px; height:26px;" onclick="app.adminModifyUserCredits('${u.id}', 'add')">發放</button>
+                <button class="btn btn-sm btn-outline text-danger" style="padding:2px 8px; font-size:11px; height:26px; border-color:rgba(239,68,68,0.2);" onclick="app.adminModifyUserCredits('${u.id}', 'sub')">扣除</button>
               </div>
             </div>
           `;
@@ -3110,25 +3116,34 @@ class AppEngine {
     this.renderCreatorStats();
   }
 
-  adminModifyUserCredits(userId, change, type = 'credits') {
+  async adminModifyUserCredits(userId, action) {
+    const inputEl = document.getElementById(`admin-credits-input-${userId}`);
+    if (!inputEl) return;
+    
+    const amount = parseInt(inputEl.value, 10);
+    if (isNaN(amount) || amount <= 0) {
+      alert("請輸入大於 0 的有效數字！");
+      return;
+    }
+
     const u = this.users.find(x => x.id === userId);
     if (!u) return;
 
-    if (type === 'credits') {
-      u.seller_credits = Math.max(0, (Number(u.seller_credits) || 0) + change);
+    if (action === 'add') {
+      u.seller_credits = (Number(u.seller_credits) || 0) + amount;
     } else {
-      u.balance = Math.max(0, (Number(u.balance) || 0) + change);
+      u.seller_credits = Math.max(0, (Number(u.seller_credits) || 0) - amount);
     }
 
     // Sync currentUser reference if the modified user is the currently logged-in user
     if (this.currentUser && this.currentUser.id === userId) {
       this.currentUser.seller_credits = u.seller_credits;
-      this.currentUser.balance = u.balance;
     }
 
-    this.saveUsers();
+    await this.saveUsers();
     
     this.triggerCloudSyncToast("使用者帳戶餘額已手動變更完成！已同步至所有裝置！");
+    inputEl.value = '';
     this.renderAdminPanels();
     this.renderCreatorStats();
     this.renderSellerStats();

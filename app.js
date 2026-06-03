@@ -563,6 +563,21 @@ class AppEngine {
           return u;
         }).filter(u => u !== null);
 
+        // Deduplicate admin accounts from Supabase to prevent multiple admins
+        const seenAdminIds = new Set();
+        this.users = this.users.filter(u => {
+          if (u.role === 'admin' || (u.roles && u.roles.includes('admin')) || u.name === '超級管理員') {
+             if (seenAdminIds.size > 0) {
+                 if (this.isCloudMode) {
+                     this.supabase.from('users').delete().eq('id', u.id).then();
+                 }
+                 return false;
+             }
+             seenAdminIds.add(u.id);
+          }
+          return true;
+        });
+
         // If admin user is not found, automatically insert it
         const admin = this.users.find(u => u.id === 'c01f6ec0-e251-4b13-9876-000000000003' || u.id === 'usr_admin');
         if (!admin) {
@@ -3285,6 +3300,43 @@ class AppEngine {
     }
   }
 
+  adminEditProductScene(productId, sceneKey, index) {
+    const p = this.products.find(x => x.id === productId);
+    if (!p || !p.scenes[sceneKey] || !p.scenes[sceneKey][index]) return;
+    
+    const currentUrl = p.scenes[sceneKey][index];
+    const newUrl = prompt("請輸入新的影片網址：", currentUrl);
+    if (newUrl && newUrl.trim() !== '' && newUrl.trim() !== currentUrl) {
+      p.scenes[sceneKey][index] = newUrl.trim();
+      this.saveProducts();
+      this.triggerCloudSyncToast("影片網址已成功修改！");
+      this.renderAdminPanels();
+    }
+  }
+
+  async adminDeleteProduct(productId) {
+    if (!confirm("⚠️ 警告：確定要刪除整個商品及其所有分鏡嗎？\n此動作無法復原！")) return;
+    
+    if (this.isCloudMode) {
+      try {
+        const { error } = await this.supabase.from('products').delete().eq('id', productId);
+        if (error) {
+          alert(`⚠️ 雲端刪除失敗：${error.message}`);
+          return;
+        }
+      } catch (err) {
+        alert(`⚠️ 雲端刪除出錯：${err.message || err}`);
+        return;
+      }
+    }
+    
+    this.products = this.products.filter(p => p.id !== productId);
+    this.saveProducts();
+    this.triggerCloudSyncToast("商品已成功刪除！");
+    this.renderAdminPanels();
+    this.renderProducts();
+  }
+
   switchAdminTab(tabId, btnElement) {
     this.adminActiveTab = tabId;
 
@@ -3383,9 +3435,14 @@ class AppEngine {
                   <div class="admin-scene-player" style="position: relative; display: flex; flex-direction: column; justify-content: space-between; min-height: 180px;">
                     <span>${chineseScenes[key]} (#${i+1})</span>
                     <video src="${url}" controls oncontextmenu="return false;" controlslist="nodownload" style="flex-grow: 1; min-height: 100px; max-height: 120px; object-fit: contain;"></video>
-                    <button class="btn btn-sm btn-outline text-danger w-100" style="margin-top: 6px; padding: 4px; font-size: 11px; font-weight: 700; border-color: rgba(239,68,68,0.2);" onclick="app.adminDeleteProductScene('${p.id}', '${key}', ${i})">
-                      <i class="fa-solid fa-trash-can"></i> 刪除分鏡
-                    </button>
+                    <div style="display: flex; gap: 4px; margin-top: 6px;">
+                      <button class="btn btn-sm btn-outline w-100" style="padding: 4px; font-size: 11px; font-weight: 700; border-color: rgba(79, 70, 229, 0.2);" onclick="app.adminEditProductScene('${p.id}', '${key}', ${i})">
+                        <i class="fa-solid fa-pen"></i> 修改
+                      </button>
+                      <button class="btn btn-sm btn-outline text-danger w-100" style="padding: 4px; font-size: 11px; font-weight: 700; border-color: rgba(239,68,68,0.2);" onclick="app.adminDeleteProductScene('${p.id}', '${key}', ${i})">
+                        <i class="fa-solid fa-trash-can"></i> 刪除
+                      </button>
+                    </div>
                   </div>
                 `;
               });
@@ -3404,6 +3461,9 @@ class AppEngine {
                     <span>${p.name}</span>
                     <button class="btn btn-sm btn-outline" style="padding: 2px 6px; font-size: 11px; height: auto; display: inline-flex; align-items: center; gap: 4px;" onclick="app.adminEditProductTitle('${p.id}')">
                       <i class="fa-regular fa-pen-to-square"></i> 編輯標題
+                    </button>
+                    <button class="btn btn-sm btn-outline text-danger" style="padding: 2px 6px; font-size: 11px; height: auto; display: inline-flex; align-items: center; gap: 4px;" onclick="app.adminDeleteProduct('${p.id}')">
+                      <i class="fa-solid fa-trash-can"></i> 刪除商品
                     </button>
                   </h4>
                   <span>分類: <b class="text-creator">${catName}</b> • 創作者: <b>${p.creator_name}</b> • 狀態: <b class="${p.status === 'approved' ? 'text-seller' : 'text-amber'}">${p.status === 'approved' ? '已上架' : '待審核'}</b> • 提交於: ${new Date(p.created_at).toLocaleDateString()}</span>

@@ -939,7 +939,7 @@
             <span class="user-avatar-tag admin-badge"><i class="fa-solid fa-user-gear"></i> 後台系統</span>
             <div>
               <h2>素材交易所控制中心</h2>
-              <p>審核創作者上傳的影片分鏡、批准提領款項、並管理使用者資料與點數。</p>
+              <p>管理創作者上傳的商品素材、批准提領款項、並管理使用者資料與點數。</p>
             </div>
           </div>
           <div>
@@ -952,23 +952,15 @@
 
       <!-- Admin Tabs -->
       <div class="admin-tabs">
-        <button class="admin-tab-btn active" onclick="app.switchAdminTab('approve-materials', this)">審核商品素材 (<span id="admin-pending-materials-count">0</span>)</button>
+        <button class="admin-tab-btn active" onclick="app.switchAdminTab('approve-materials', this)"><i class="fa-solid fa-photo-film"></i> 商品素材管理</button>
         <button class="admin-tab-btn" onclick="app.switchAdminTab('approve-withdrawals', this)">審核提領申請 (<span id="admin-pending-withdrawals-count">0</span>)</button>
         <button class="admin-tab-btn" onclick="app.switchAdminTab('users-management', this)">用戶管理</button>
       </div>
 
-      <!-- Admin Tab Content 1: Approve Materials -->
       <div id="admin-tab-approve-materials" class="admin-tab-content">
         <div class="card">
-          <h3>待審核商品影片列表</h3>
-          <p class="section-desc">請仔細查閱創作者上傳的 1:1 照片與各項影片分鏡，確認質量合格後發布同步上架至帶貨神器。</p>
-          
-          <!-- Admin Materials Filter Bar -->
-          <div class="admin-filter-bar" style="display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid var(--border-light); padding-bottom: 12px;">
-            <button class="btn btn-sm" id="admin-filter-pending" onclick="app.setAdminProductFilter('pending', this)" style="background-color: var(--border-dark); color: var(--bg-primary); font-weight: 700;">待審核素材</button>
-            <button class="btn btn-sm btn-outline" id="admin-filter-approved" onclick="app.setAdminProductFilter('approved', this)" style="font-weight: 700;">已上架素材</button>
-            <button class="btn btn-sm btn-outline" id="admin-filter-all" onclick="app.setAdminProductFilter('all', this)" style="font-weight: 700;">所有素材</button>
-          </div>
+          <h3>商品影片素材列表</h3>
+          <p class="section-desc">查閱所有創作者上傳的商品照片與影片分鏡，您可以隨時修改標題、網址，或將違規素材刪除下架。</p>
           
           <div class="pending-materials-list" id="admin-pending-materials-container">
             <!-- Dynamic pending items render here -->

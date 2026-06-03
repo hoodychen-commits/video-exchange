@@ -3272,11 +3272,6 @@ class AppEngine {
     const p = this.products.find(x => x.id === productId);
     if (!p) return;
 
-    if (p.status === 'approved') {
-      alert("⚠️ 錯誤：已上架的商品無法自行刪除，請聯繫管理員！");
-      return;
-    }
-
     if (!confirm("⚠️ 確定要刪除這筆上傳的商品素材嗎？刪除後將無法復原！")) return;
     
     if (this.isCloudMode) {
@@ -3414,35 +3409,19 @@ class AppEngine {
 
   renderAdminPanels() {
     // 1. Pending counts
-    const pendingProds = this.products.filter(p => p.status === 'pending');
     const pendingWtd = this.withdrawals.filter(w => w.status === 'pending');
 
-    const mCount = document.getElementById('admin-pending-materials-count');
     const wCount = document.getElementById('admin-pending-withdrawals-count');
-
-    if (mCount) mCount.innerText = pendingProds.length;
     if (wCount) wCount.innerText = pendingWtd.length;
 
-    // 2. Filtered Materials Container
+    // 2. Materials Container
     const matContainer = document.getElementById('admin-pending-materials-container');
     if (matContainer) {
-      let displayProds = [];
-      if (this.adminProductFilter === 'pending') {
-        displayProds = this.products.filter(p => p.status === 'pending');
-      } else if (this.adminProductFilter === 'approved') {
-        displayProds = this.products.filter(p => p.status === 'approved');
-      } else {
-        displayProds = this.products;
-      }
+      // Just show all products since there's no review anymore
+      let displayProds = this.products;
 
       if (displayProds.length === 0) {
-        let emptyText = "目前暫無等待審核的創作者素材 😊";
-        if (this.adminProductFilter === 'approved') {
-          emptyText = "目前暫無已上架的商品素材 📦";
-        } else if (this.adminProductFilter === 'all') {
-          emptyText = "目前平台暫無任何商品素材 🔍";
-        }
-        matContainer.innerHTML = `<div class="text-center text-muted py-4">${emptyText}</div>`;
+        matContainer.innerHTML = `<div class="text-center text-muted py-4">目前平台暫無任何商品素材 🔍</div>`;
       } else {
         matContainer.innerHTML = '';
         displayProds.forEach(p => {
@@ -3494,20 +3473,13 @@ class AppEngine {
                       <i class="fa-solid fa-trash-can"></i> 刪除商品
                     </button>
                   </h4>
-                  <span>分類: <b class="text-creator">${catName}</b> • 創作者: <b>${p.creator_name}</b> • 狀態: <b class="${p.status === 'approved' ? 'text-seller' : 'text-amber'}">${p.status === 'approved' ? '已上架' : '待審核'}</b> • 提交於: ${new Date(p.created_at).toLocaleDateString()}</span>
+                  <span>分類: <b class="text-creator">${catName}</b> • 創作者: <b>${p.creator_name}</b> • 狀態: <b class="text-seller">已上架</b> • 提交於: ${new Date(p.created_at).toLocaleDateString()}</span>
                 </div>
               </div>
               <div class="admin-action-btns">
-                ${p.status === 'pending' ? `
-                  <button class="btn btn-sm btn-outline" onclick="app.adminApproveProduct('${p.id}', true)"><i class="fa-solid fa-gem text-amber"></i> 高優質通過</button>
-                  <button class="btn btn-sm btn-seller" onclick="app.adminApproveProduct('${p.id}', false)"><i class="fa-solid fa-check"></i> 審核通過</button>
-                  <button class="btn btn-sm btn-outline text-danger" onclick="app.adminRejectProduct('${p.id}')"><i class="fa-solid fa-xmark"></i> 拒絕退回</button>
-                ` : `
-                  <span class="badge" style="padding: 6px 12px; font-weight: 700; border-radius: 4px; ${p.status === 'approved' ? 'background-color: var(--color-seller-light); color: var(--color-seller);' : 'background-color: #f3f4f6; color: #4b5563;'}">
-                    ${p.status === 'approved' ? '<i class="fa-solid fa-circle-check"></i> 已審核上架' : '已拒絕退回'}
-                  </span>
-                  ${p.status === 'approved' ? `<button class="btn btn-sm btn-outline text-danger" style="margin-left: 6px;" onclick="app.adminRejectProduct('${p.id}')">下架商品</button>` : ''}
-                `}
+                <button class="btn btn-sm ${p.is_quality ? 'btn-outline' : 'btn-seller'}" onclick="app.adminToggleQuality('${p.id}')">
+                  <i class="fa-solid fa-gem"></i> ${p.is_quality ? '取消高品質標章' : '設為高品質'}
+                </button>
               </div>
             </div>
             <div class="pending-scenes-admin-grid">${scenesGridHtml}</div>
@@ -3622,53 +3594,16 @@ class AppEngine {
     }
   }
 
-  adminApproveProduct(productId, isHighQuality = false) {
-    try {
-      const p = this.products.find(x => x.id === productId);
-      if (!p) {
-        alert("找不到該商品素材！");
-        return;
-      }
-
-      p.status = 'approved';
-      p.is_quality = isHighQuality;
-
-      // Recalculate levels of the creator immediately since they have a new approved product
-      try {
-        const creator = this.users.find(u => u.id === p.creator_id);
-        if (creator) {
-          this.recalculateUserCreatorLevel(creator);
-          this.saveUsers([creator]);
-        }
-      } catch (err) {
-        console.error("Error recalculating creator level during approval:", err);
-      }
-      
-      this.saveProducts();
-
-      this.triggerCloudSyncToast("素材已審核通過上架！");
-      alert(`👍 商品素材審核通過！已同步上架至帶貨神器首頁。${isHighQuality ? '已標記為【高品質】！' : ''}`);
-      
-      this.renderAdminPanels();
-      this.renderProducts();
-      this.renderCreatorStats();
-    } catch (err) {
-      console.error("Error in adminApproveProduct:", err);
-      alert("審核失敗，錯誤原因：" + err.message);
-    }
-  }
-
-  adminRejectProduct(productId) {
+  adminToggleQuality(productId) {
     const p = this.products.find(x => x.id === productId);
     if (!p) return;
 
-    p.status = 'rejected';
+    p.is_quality = !p.is_quality;
     this.saveProducts();
 
-    this.triggerCloudSyncToast("素材已被駁回退回！");
-    alert(`素材已被駁回退回！`);
-    
+    this.triggerCloudSyncToast(p.is_quality ? "已標記為高品質！" : "已取消高品質標籤！");
     this.renderAdminPanels();
+    this.renderProducts();
   }
 
   adminApproveWithdrawal(withdrawalId) {

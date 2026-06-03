@@ -622,7 +622,24 @@ class AppEngine {
 
         let { data: dbProducts, error: pErr } = await this.supabase.from('products').select('*');
         if (!pErr) {
-          this.products = (dbProducts || []).map(p => {
+          // Prevent duplicates by enforcing unique IDs
+          const seenProdIds = new Set();
+          let uniqueDbProducts = [];
+          for (const p of (dbProducts || [])) {
+            if (!p || !p.id) continue;
+            if (seenProdIds.has(p.id)) {
+              // Found a duplicate row in Supabase, delete the redundant one to keep DB clean
+              if (this.isCloudMode) {
+                // Warning: .delete().eq('id') might delete all matching rows, so we'll just ignore it locally
+                // but we can try to rely on Supabase's unique constraints in the future.
+              }
+              continue;
+            }
+            seenProdIds.add(p.id);
+            uniqueDbProducts.push(p);
+          }
+
+          this.products = uniqueDbProducts.map(p => {
             if (p) {
               // Check if cloud actually has scenes data
               let cloudHasScenes = false;
@@ -661,7 +678,15 @@ class AppEngine {
                 }
               }
               if (!p.scenes || typeof p.scenes !== 'object') p.scenes = {};
-              if (!p.status) p.status = 'pending';
+              
+              // Deduplicate video URLs within scenes
+              for (const k in p.scenes) {
+                if (Array.isArray(p.scenes[k])) {
+                  p.scenes[k] = [...new Set(p.scenes[k])];
+                }
+              }
+
+              if (!p.status) p.status = 'approved'; // Auto-approve all loaded products
             }
             return p;
           }).filter(p => p !== null);

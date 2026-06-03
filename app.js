@@ -1100,7 +1100,7 @@ class AppEngine {
 
     if (levelReq) {
       if (currentLvl >= 10) {
-        levelReq.innerText = "已達到最高等級！享有最高 10個人下載賺 $10 元收益分成";
+        levelReq.innerText = "已達到最高等級！享有最高 10個人下載賺 $30 元收益分成";
         if (levelFill) levelFill.style.width = "100%";
       } else {
         const nextLvl = currentLvl + 1;
@@ -1723,7 +1723,7 @@ class AppEngine {
         name: c.name,
         downloads,
         level: c.level,
-        payoutRate: (c.level * 0.1) + 0.2 // Higher payout factor per download
+        payoutRate: [0, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.2, 2.4, 2.6, 3.0][c.level] || 1.0
       };
     });
 
@@ -2056,8 +2056,9 @@ class AppEngine {
     if (product) {
       const creator = this.users.find(u => u.id === product.creator_id);
       if (creator) {
-        // Levels commission structure (LV1 = $0.3 per download, up to LV10 = $1.0 per download)
-        const commissionPerDownload = (creator.level * 0.1) + 0.2; 
+        // Levels commission structure (LV1 = $1.0 per download, up to LV10 = $3.0 per download)
+        const commissionMap = [0, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.2, 2.4, 2.6, 3.0];
+        const commissionPerDownload = commissionMap[creator.level] || 1.0;
         creator.balance += commissionPerDownload;
         creator.total_earnings += commissionPerDownload;
         this.saveUsers();

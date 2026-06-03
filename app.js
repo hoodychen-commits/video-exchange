@@ -533,13 +533,22 @@ class AppEngine {
 
             if (isSeller) {
               if (!isCreator) {
-                // Pure seller: read from balance
-                u.seller_credits = Number(u.balance) || 0;
+                // Pure seller: read from Supabase balance column
+                const cloudCredits = Number(u.balance) || 0;
+                // CRITICAL: Also check localStorage — if local value is LOWER than cloud,
+                // it means a deduction happened locally but cloud hasn't updated yet (race condition).
+                // Always take the LOWER value to prevent credits restoring after refresh.
+                const localMatch = localUsersFallback.find(lu => lu.id === u.id);
+                const localCredits = localMatch ? (Number(localMatch.seller_credits) ?? cloudCredits) : cloudCredits;
+                u.seller_credits = Math.min(cloudCredits, localCredits);
                 u.balance = 0;
               } else {
                 // Dual role: fetch from decoded email, or fallback to local storage backup
                 if (decodedSc !== null && !isNaN(decodedSc)) {
-                  u.seller_credits = decodedSc;
+                  // Same logic: compare decoded cloud value vs localStorage, take lower
+                  const localMatch = localUsersFallback.find(lu => lu.id === u.id);
+                  const localCredits = localMatch ? (Number(localMatch.seller_credits) ?? decodedSc) : decodedSc;
+                  u.seller_credits = Math.min(decodedSc, localCredits);
                 } else {
                   const localMatch = localUsersFallback.find(lu => lu.id === u.id);
                   u.seller_credits = localMatch ? (Number(localMatch.seller_credits) || 0) : 0;
@@ -3029,8 +3038,7 @@ class AppEngine {
       } 
       // If sharing all files at once failed or isn't supported, but we can share one by one
       if (!downloadTriggered && !fetchFailed && filesToShare.length > 0 && navigator.canShare && navigator.canShare({ files: [filesToShare[0]] })) {
-        alert("您的裝置不支援一次同時儲存多部影片。\n系統將為您「逐一彈出」儲存視窗，請針對每個視窗點擊「儲存影片」。\n若未彈出，請利用列表的「儲存」按鈕單獨下載。");
-        
+        // Silently share one by one — no alert, just trigger each share sheet directly
         for (let i = 0; i < filesToShare.length; i++) {
           try {
             await navigator.share({
@@ -3038,11 +3046,10 @@ class AppEngine {
               title: '素材影片下載',
               text: `第 ${i+1} 部影片`
             });
-            // Add a small delay between share sheets
-            await new Promise(resolve => setTimeout(resolve, 800));
+            await new Promise(resolve => setTimeout(resolve, 500));
           } catch (err) {
             console.warn("Individual share failed:", err);
-            if (err.name === 'AbortError') break; // Stop the loop if user cancelled
+            if (err.name === 'AbortError') break;
           }
         }
         downloadTriggered = true;
@@ -3052,7 +3059,6 @@ class AppEngine {
       
       // Fallback: Direct download using <a> tag (works on PC, on mobile opens in new tab)
       if (!downloadTriggered) {
-        alert(`🎉 成功扣除 5 積分！系統即將為您打包下載 ${checkboxes.length} 個分鏡素材！\n如果影片在新分頁中打開，請點擊右下角「⋮」並選擇下載，或長按影片儲存。`);
         for (let i = 0; i < checkboxes.length; i++) {
           const url = checkboxes[i].value;
           if (i > 0) await new Promise(resolve => setTimeout(resolve, 1000));

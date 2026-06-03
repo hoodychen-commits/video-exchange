@@ -1072,7 +1072,8 @@ class AppEngine {
             console.log("Cloud users successfully upserted!");
           } else {
             console.warn("Cloud users upsert attempt failed:", error.message);
-            const match = error.message.match(/column "([^"]+)" of relation "users" does not exist/);
+            const match = error.message.match(/column "([^"]+)" of relation "users" does not exist/i) || 
+                          error.message.match(/Could not find the '([^']+)' column/i);
             if (match && match[1]) {
               const missingCol = match[1];
               console.log(`Dynamically stripping missing column '${missingCol}' and retrying...`);
@@ -1169,7 +1170,7 @@ class AppEngine {
       alert(`⚠️ 雲端資料庫儲存失敗：已被行級安全防護 (RLS) 封鎖！\n請至 Supabase -> SQL Editor 運行『ALTER TABLE ${table} DISABLE ROW LEVEL SECURITY;』來解鎖權限！`);
     } else {
       console.error(`Cloud sync error for ${table}:`, error.message);
-      alert(`⚠️ 雲端庫同步失敗 (${table})\n錯誤: ${error.message}\n如果這是上傳商品，請注意這會導致重新整理後商品消失，請截圖給工程師。`);
+      alert(`⚠️ 雲端庫同步失敗 (${table})\n錯誤: ${error.message}\n如果這是上傳商品，請注意這會導致重新整理後商品消失，請稍後再試。`);
     }
   }
 
@@ -2853,22 +2854,20 @@ class AppEngine {
       return;
     }
 
-    const infoText = `【💰 點數加值引導】\n\n您已選擇儲值方案：TWD $${amount.toLocaleString()} 元\n可兌換積分點數：${(amount + bonus).toLocaleString()} 點 (含額外贈點)\n\n目前本平台儲值統一採用 LINE 官方客服協助開通。\n\n點擊「確認」將為您複製加值方案資訊，並自動跳轉至 LINE@ 客服聯絡視窗，請直接向客服人員索取匯款資訊並開通點數！`;
-
-    if (confirm(infoText)) {
-      // Auto-copy details for the user
-      const copyText = `【申請加值點數通知】\n加值方案：TWD $${amount} 元\n兌換點數：${amount + bonus} 點\n註冊電話：${this.currentUser.phone || '未提供'}\n\n(請傳送此訊息給客服人員以索取匯款帳號開通)`;
-      
-      navigator.clipboard.writeText(copyText).then(() => {
-        this.triggerCloudSyncToast("加值資訊已複製！請至 LINE 直接貼上發送！");
-      }).catch(err => {
-        console.warn("Clipboard copy failed, fallback logic used:", err);
-      });
-
-      // Open Line link in new tab
-      window.open("https://lin.ee/VN4zDFs", "_blank");
-      this.closeRechargeModal();
+    // Auto-recharge for testing / seamless flow (as requested)
+    const addPoints = amount + bonus;
+    this.currentUser.seller_credits += addPoints;
+    
+    // Save to users array
+    const userIdx = this.users.findIndex(u => u.id === this.currentUser.id);
+    if (userIdx !== -1) {
+      this.users[userIdx] = this.currentUser;
+      this.saveUsers([this.currentUser]);
     }
+    
+    this.renderSellerStats();
+    this.triggerCloudSyncToast(`🎉 成功自動加值 ${addPoints.toLocaleString()} 點積分！`);
+    this.closeRechargeModal();
   }
 
   // --------------------------------------------------
@@ -3041,7 +3040,7 @@ class AppEngine {
     }
 
     if (this.currentUser.seller_credits < 5) {
-      alert("📥 下載失敗：您的積分點數餘額不足！請先儲存至少 5 點積分。");
+      alert("📥 下載失敗：您的積分點數餘額不足！請先儲值至少 5 點積分。");
       this.closeProductDetailModal();
       this.openRechargeModal();
       return false;

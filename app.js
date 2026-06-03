@@ -41,6 +41,7 @@ class AppEngine {
     this.users = [];
     this.products = [];
     this.withdrawals = [];
+    this.downloads = [];
     this.activeView = 'home';
     this.activeCreatorTab = 'dashboard';
     this.adminActiveTab = 'approve-materials';
@@ -596,6 +597,13 @@ class AppEngine {
             JSON.parse(localProductsStr).forEach(lp => {
               if (lp && lp.id) localProductsMap[lp.id] = lp;
             });
+          } catch(e) {}
+        }
+
+        const localDownloadsStr = localStorage.getItem('app_downloads');
+        if (localDownloadsStr) {
+          try {
+            this.downloads = JSON.parse(localDownloadsStr);
           } catch(e) {}
         }
         // Also build a map of current in-memory products (most up-to-date source of truth for scenes)
@@ -2486,6 +2494,44 @@ class AppEngine {
 
     const credEl = document.getElementById('seller-credits');
     if (credEl) credEl.innerText = this.currentUser.seller_credits;
+
+    this.renderSellerDeductionHistory();
+  }
+
+  renderSellerDeductionHistory() {
+    const listBody = document.getElementById('seller-deduction-list');
+    if (!listBody || !this.currentUser) return;
+    
+    const myDownloads = this.downloads.filter(d => d.user_id === this.currentUser.id)
+                                      .sort((a, b) => new Date(b.downloaded_at) - new Date(a.downloaded_at));
+    
+    if (myDownloads.length === 0) {
+      listBody.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-3">暫無扣點紀錄</td></tr>';
+      return;
+    }
+    
+    listBody.innerHTML = '';
+    myDownloads.forEach(d => {
+      const row = document.createElement('tr');
+      const dDate = new Date(d.downloaded_at);
+      const isWithin24h = (new Date() - dDate) < 24 * 60 * 60 * 1000;
+      const statusBadge = isWithin24h ? `<span class="badge" style="background:var(--bg-secondary); color:var(--text-muted); font-size:10px; margin-left:8px;">24H內免扣</span>` : '';
+      
+      row.innerHTML = `
+        <td>
+          <div style="font-weight: 600;">${dDate.toLocaleDateString()}</div>
+          <div style="font-size: 11px; color: var(--text-muted);">${dDate.toLocaleTimeString()}</div>
+        </td>
+        <td>
+          <div style="font-weight: 700;">${d.product_name || '商品素材'}</div>
+          ${statusBadge}
+        </td>
+        <td>
+          <span style="color: var(--color-danger); font-weight: 800;">- ${d.points_deducted}</span> 點
+        </td>
+      `;
+      listBody.appendChild(row);
+    });
   }
 
   populateCreatorCategoryDropdown() {
@@ -2880,6 +2926,24 @@ class AppEngine {
       return false;
     }
 
+    const product = this.activeDetailedProduct;
+    if (!product) return false;
+
+    // Check if already downloaded within 24 hours
+    const now = new Date();
+    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    
+    const recentDownload = this.downloads.find(d => 
+      d.user_id === this.currentUser.id && 
+      d.product_id === product.id && 
+      new Date(d.downloaded_at) > twentyFourHoursAgo
+    );
+
+    if (recentDownload) {
+      this.triggerCloudSyncToast("同商品 24 小時內免重複扣點！");
+      return true; // Proceed with download without deducting
+    }
+
     if (this.currentUser.seller_credits < 5) {
       alert("📥 下載失敗：您的積分點數餘額不足！請先儲存至少 5 點積分。");
       this.closeProductDetailModal();
@@ -2914,6 +2978,17 @@ class AppEngine {
         }
       }
     }
+
+    // Save download history locally (since we don't have a downloads table in cloud)
+    this.downloads.push({
+      id: this.generateUUID(),
+      user_id: this.currentUser.id,
+      product_id: product.id,
+      product_name: product.name,
+      points_deducted: 5,
+      downloaded_at: new Date().toISOString()
+    });
+    localStorage.setItem('app_downloads', JSON.stringify(this.downloads));
 
     // Await ALL save operations to ensure cloud is updated before user can refresh
     await this.saveUsers();

@@ -2469,6 +2469,8 @@ class AppEngine {
       approved.slice(0, 3).forEach(p => {
         const row = document.createElement('div');
         row.className = 'trend-row';
+        row.style.cursor = 'pointer';
+        row.onclick = () => this.openProductDetailModal(p.id);
         row.innerHTML = `
           <div class="trend-img-box"><img src="${p.photo_url}"></div>
           <div class="trend-info">
@@ -2564,8 +2566,11 @@ class AppEngine {
     };
 
     let count = 0;
+    const safeScenes = p.scenes || {
+      other: p.video_url ? [p.video_url] : []
+    };
     for (const key in chineseScenes) {
-      const urls = p.scenes[key] || [];
+      const urls = safeScenes[key] || [];
       if (urls.length > 0) {
         count++;
         // Display each video file available

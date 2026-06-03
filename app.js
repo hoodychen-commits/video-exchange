@@ -987,10 +987,11 @@ class AppEngine {
     }
   }
 
-  async saveUsers() {
+  async saveUsers(usersToSync = null) {
     localStorage.setItem('app_users', JSON.stringify(this.users));
     if (this.isCloudMode) {
-      let retryUsers = JSON.parse(JSON.stringify(this.users)).filter(u => u !== null).map(u => {
+      let listToSync = usersToSync ? usersToSync : this.users;
+      let retryUsers = JSON.parse(JSON.stringify(listToSync)).filter(u => u !== null).map(u => {
         // Normalize: always sync both passwordHash and passwordhash to Supabase
         if (u.passwordHash) u.passwordhash = u.passwordHash;
         if (u.passwordhash) u.passwordHash = u.passwordhash;
@@ -2996,7 +2997,12 @@ class AppEngine {
     localStorage.setItem('app_downloads', JSON.stringify(this.downloads));
 
     // Await ALL save operations to ensure cloud is updated before user can refresh
-    await this.saveUsers();
+    let usersToSync = [this.currentUser];
+    if (product) {
+      const creator = this.users.find(u => u.id === product.creator_id);
+      if (creator) usersToSync.push(creator);
+    }
+    await this.saveUsers(usersToSync);
     await this.saveProducts();
 
     // Proactively refresh all UI stats and product lists instantly
@@ -3598,13 +3604,13 @@ class AppEngine {
         const creator = this.users.find(u => u.id === p.creator_id);
         if (creator) {
           this.recalculateUserCreatorLevel(creator);
+          this.saveUsers([creator]);
         }
       } catch (err) {
         console.error("Error recalculating creator level during approval:", err);
       }
       
       this.saveProducts();
-      this.saveUsers();
 
       this.triggerCloudSyncToast("素材已審核通過上架！");
       alert(`👍 商品素材審核通過！已同步上架至帶貨神器首頁。${isHighQuality ? '已標記為【高品質】！' : ''}`);
@@ -3655,7 +3661,7 @@ class AppEngine {
     const creator = this.users.find(u => u.id === w.creator_id);
     if (creator) {
       creator.balance += w.amount;
-      this.saveUsers();
+      this.saveUsers([creator]);
     }
 
     this.saveWithdrawals();
@@ -3691,7 +3697,7 @@ class AppEngine {
       this.currentUser.seller_credits = u.seller_credits;
     }
 
-    await this.saveUsers();
+    await this.saveUsers([u]);
     
     this.triggerCloudSyncToast("使用者帳戶餘額已手動變更完成！已同步至所有裝置！");
     inputEl.value = '';
@@ -3706,7 +3712,7 @@ class AppEngine {
     if (!u) return;
 
     u.level = Math.min(10, u.level + change);
-    this.saveUsers();
+    this.saveUsers([u]);
 
     this.triggerCloudSyncToast("創作者等級已手動調整完成！");
     this.renderAdminPanels();

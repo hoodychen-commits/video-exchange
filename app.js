@@ -506,6 +506,14 @@ class AppEngine {
 
         this.users = (dbUsers || []).map(u => {
           if (u) {
+            // Normalize passwordhash (Supabase column) to passwordHash (app code convention)
+            if (u.passwordhash && !u.passwordHash) {
+              u.passwordHash = u.passwordhash;
+            }
+            if (u.passwordHash && !u.passwordhash) {
+              u.passwordhash = u.passwordHash;
+            }
+
             if (!u.roles) {
               u.roles = [u.role || 'creator'];
             }
@@ -893,6 +901,9 @@ class AppEngine {
     localStorage.setItem('app_users', JSON.stringify(this.users));
     if (this.isCloudMode) {
       let retryUsers = JSON.parse(JSON.stringify(this.users)).filter(u => u !== null).map(u => {
+        // Normalize: always sync both passwordHash and passwordhash to Supabase
+        if (u.passwordHash) u.passwordhash = u.passwordHash;
+        if (u.passwordhash) u.passwordHash = u.passwordhash;
         const isSeller = u.role === 'seller' || (u.roles && u.roles.includes('seller'));
         const isCreator = u.role === 'creator' || (u.roles && u.roles.includes('creator'));
         if (isSeller) {

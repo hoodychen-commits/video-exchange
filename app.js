@@ -126,6 +126,8 @@ class AppEngine {
     // Check local storage for runtime configuration first
     let url = localStorage.getItem('supabase_url');
     let key = localStorage.getItem('supabase_key');
+    if (url === 'undefined' || url === 'null' || url === '') url = null;
+    if (key === 'undefined' || key === 'null' || key === '') key = null;
 
     // If not in local storage, check if the hardcoded values are real (not placeholders)
     if (!url || !key) {
@@ -2737,6 +2739,25 @@ class AppEngine {
         if (!response.ok) throw new Error("Network response was not ok");
         
         const blob = await response.blob();
+        
+        // Use Web Share API if available (Great for iOS 'Save Video' to album)
+        if (navigator.canShare && navigator.share) {
+          try {
+            const file = new File([blob], filename, { type: blob.type || 'video/mp4' });
+            if (navigator.canShare({ files: [file] })) {
+              await navigator.share({
+                files: [file],
+                title: '素材影片下載',
+                text: filename
+              });
+              return; // Successfully shared/saved
+            }
+          } catch (shareErr) {
+            console.warn("Share API failed or user cancelled:", shareErr);
+            return; // If user cancelled share sheet, don't fallback to downloading again
+          }
+        }
+
         const blobUrl = URL.createObjectURL(blob);
         
         const link = document.createElement('a');

@@ -2738,6 +2738,15 @@ class AppEngine {
             });
             this.closeProductDetailModal();
             return;
+          } else if (filesToShare.length > 0 && navigator.canShare({ files: [filesToShare[0]] })) {
+            alert("您的裝置不支援一次同時儲存多部影片，將為您儲存第一部影片。\n如需儲存其他影片，請逐一勾選下載，或於影片上長按「儲存影片」。");
+            await navigator.share({
+              files: [filesToShare[0]],
+              title: '素材影片下載',
+              text: `第 1 部影片`
+            });
+            this.closeProductDetailModal();
+            return;
           }
         } catch (err) {
           console.warn("Bulk share failed or cancelled, falling back to individual download:", err);
@@ -2804,6 +2813,7 @@ class AppEngine {
         const link = document.createElement('a');
         link.href = blobUrl;
         link.download = filename;
+        link.target = '_blank';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);

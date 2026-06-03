@@ -73,6 +73,9 @@ class AppEngine {
 
     // 2. Load state from cloud or localStorage
     await this.loadState();
+
+    // Migrate any legacy IDs to clean UUIDs to prevent Supabase type mismatches
+    this.migrateMockIdsToUUIDs();
     
     // 3. Bind global security blockers
     this.bindSecurityEvents();
@@ -248,12 +251,98 @@ class AppEngine {
   // --------------------------------------------------
   // 0. ADMIN SECURE ENTRY & AUTHENTICATION (HIDDEN)
   // --------------------------------------------------
+  generateUUID() {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  }
+
+  sha256Fallback(ascii) {
+    function rightRotate(value, amount) {
+      return (value>>>amount) | (value<<(32-amount));
+    }
+    const mathPow = Math.pow;
+    const maxWord = mathPow(2, 32);
+    let i, j;
+    let result = '';
+    const words = [];
+    const asciiLength = ascii.length * 8;
+    const hash = [], k = [];
+    let primeCounter = 0;
+    const isComposite = {};
+    for (let candidate = 2; primeCounter < 64; candidate++) {
+      if (!isComposite[candidate]) {
+        for (i = 0; i < 313; i += candidate) {
+          isComposite[i] = true;
+        }
+        if (primeCounter < 8) {
+          hash[primeCounter] = (mathPow(candidate, .5)*maxWord)|0;
+        }
+        k[primeCounter] = (mathPow(candidate, 1/3)*maxWord)|0;
+        primeCounter++;
+      }
+    }
+    ascii += '\x80';
+    while (ascii.length % 64 - 56) ascii += '\x00';
+    for (i = 0; i < ascii.length; i++) {
+      j = ascii.charCodeAt(i);
+      if (j >> 8) return ''; // ASCII only
+      words[i>>2] |= j << ((3 - i % 4)*8);
+    }
+    words[words.length] = ((asciiLength/maxWord)|0);
+    words[words.length] = (asciiLength|0);
+    for (j = 0; j < words.length;) {
+      const w = words.slice(j, j += 16);
+      const oldHash = hash.slice(0);
+      for (i = 0; i < 64; i++) {
+        const w15 = w[i - 15], w2 = w[i - 2];
+        const a = hash[0], e = hash[4];
+        const temp1 = hash[7]
+          + (rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25))
+          + ((e & hash[5]) ^ (~e & hash[6]))
+          + k[i]
+          + (w[i] = (i < 16 ? w[i] : (
+              w[i - 16]
+              + (rightRotate(w15, 7) ^ rightRotate(w15, 18) ^ (w15>>>3))
+              + w[i - 7]
+              + (rightRotate(w2, 17) ^ rightRotate(w2, 19) ^ (w2>>>10))
+            )|0
+          ));
+        const temp2 = (rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22))
+          + ((a & hash[1]) ^ (a & hash[2]) ^ (hash[1] & hash[2]));
+        hash = [(temp1 + temp2)|0].concat(hash.slice(0, 7));
+        hash[4] = (hash[4] + temp1)|0;
+      }
+      for (i = 0; i < 8; i++) {
+        hash[i] = (hash[i] + oldHash[i])|0;
+      }
+    }
+    for (i = 0; i < 8; i++) {
+      for (j = 3; j + 1; j--) {
+        const b = (hash[i]>>(j*8))&255;
+        result += ((b < 16) ? 0 : '') + b.toString(16);
+      }
+    }
+    return result;
+  }
+
   async sha256(message) {
-    const msgBuffer = new TextEncoder().encode(message);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    return hashHex;
+    try {
+      if (typeof window !== 'undefined' && window.crypto && window.crypto.subtle) {
+        const msgBuffer = new TextEncoder().encode(message);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        return hashHex;
+      }
+    } catch (e) {
+      console.warn("crypto.subtle.digest failed, using JS fallback:", e);
+    }
+    return this.sha256Fallback(message);
   }
 
   initAdminSecureEntry() {
@@ -324,13 +413,13 @@ class AppEngine {
     // Hash the password input
     let inputHash = await this.sha256(password);
     
-    // Find admin user (by role or email fallback)
-    let adminUser = this.users.find(u => u.role === 'admin' || (u.roles && u.roles.includes('admin')) || u.id === 'usr_admin');
+    // Find admin user (by role or email fallback or UUIDs)
+    let adminUser = this.users.find(u => u.role === 'admin' || (u.roles && u.roles.includes('admin')) || u.id === 'c01f6ec0-e251-4b13-9876-000000000003' || u.id === 'usr_admin');
     
     // Fail-safe: if admin user object is not found anywhere in memory/database, dynamically create it in memory
     if (!adminUser) {
       adminUser = {
-        id: "usr_admin",
+        id: "c01f6ec0-e251-4b13-9876-000000000003",
         name: "超級管理員",
         phone: "admin_secure_credential_102948",
         email: "admin@material.exchange",
@@ -351,10 +440,14 @@ class AppEngine {
       inputHash = adminUser.passwordHash;
     }
 
-    if (email === adminUser.email && inputHash === adminUser.passwordHash) {
+    const adminEmail = adminUser.email || "admin@material.exchange";
+    const isEmailCorrect = (email === adminEmail) || (email === "admin@material.exchange");
+
+    if (isEmailCorrect && inputHash === adminUser.passwordHash) {
       // Login successful!
       this.currentUser = adminUser;
       localStorage.setItem('app_session', adminUser.id);
+      sessionStorage.setItem('admin_authenticated', 'true');
 
       this.triggerCloudSyncToast("管理員安全認證成功！");
       this.closeAdminSecureModal();
@@ -385,10 +478,10 @@ class AppEngine {
         this.users = dbUsers || [];
 
         // If admin user is not found, automatically insert it
-        const admin = this.users.find(u => u.id === 'usr_admin');
+        const admin = this.users.find(u => u.id === 'c01f6ec0-e251-4b13-9876-000000000003' || u.id === 'usr_admin');
         if (!admin) {
           const defaultAdmin = {
-            id: "usr_admin",
+            id: "c01f6ec0-e251-4b13-9876-000000000003",
             name: "超級管理員",
             phone: "admin_secure_credential_102948",
             email: "admin@material.exchange",
@@ -448,10 +541,10 @@ class AppEngine {
         }
       });
       
-      let storedAdmin = this.users.find(u => u.id === 'usr_admin');
+      let storedAdmin = this.users.find(u => u.id === 'c01f6ec0-e251-4b13-9876-000000000003' || u.id === 'usr_admin');
       if (!storedAdmin) {
         storedAdmin = {
-          id: "usr_admin",
+          id: "c01f6ec0-e251-4b13-9876-000000000003",
           name: "超級管理員",
           phone: "admin_secure_credential_102948",
           email: "admin@material.exchange",
@@ -483,7 +576,7 @@ class AppEngine {
     } else {
       this.users = [
         {
-          id: "usr_creator_01",
+          id: "c01f6ec0-e251-4b13-9876-000000000001",
           name: "陳阿明",
           phone: "0912345678",
           email: "amin@example.com",
@@ -502,7 +595,7 @@ class AppEngine {
           }
         },
         {
-          id: "usr_seller_01",
+          id: "c01f6ec0-e251-4b13-9876-000000000002",
           name: "林小花",
           phone: "0987654321",
           email: "flower@example.com",
@@ -515,7 +608,7 @@ class AppEngine {
           created_at: new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString()
         },
         {
-          id: "usr_admin",
+          id: "c01f6ec0-e251-4b13-9876-000000000003",
           name: "超級管理員",
           phone: "admin_secure_credential_102948",
           email: "admin@material.exchange",
@@ -537,8 +630,8 @@ class AppEngine {
     } else {
       this.products = [
         {
-          id: "prod_01",
-          creator_id: "usr_creator_01",
+          id: "d01f6ec0-e251-4b13-9876-000000000001",
+          creator_id: "c01f6ec0-e251-4b13-9876-000000000001",
           creator_name: "陳阿明",
           name: "日系極簡雙層智能保溫杯 (Shopee 爆款)",
           category: "home-living",
@@ -557,8 +650,8 @@ class AppEngine {
           }
         },
         {
-          id: "prod_02",
-          creator_id: "usr_creator_01",
+          id: "d01f6ec0-e251-4b13-9876-000000000002",
+          creator_id: "c01f6ec0-e251-4b13-9876-000000000001",
           creator_name: "陳阿明",
           name: "北歐風大理石不鏽鋼防水石英手錶",
           category: "shoes-bags",
@@ -577,8 +670,8 @@ class AppEngine {
           }
         },
         {
-          id: "prod_03",
-          creator_id: "usr_creator_01",
+          id: "d01f6ec0-e251-4b13-9876-000000000003",
+          creator_id: "c01f6ec0-e251-4b13-9876-000000000001",
           creator_name: "陳阿明",
           name: "防滑高透氣編織運動慢跑鞋",
           category: "shoes-bags",
@@ -605,8 +698,8 @@ class AppEngine {
     } else {
       this.withdrawals = [
         {
-          id: "wtd_01",
-          creator_id: "usr_creator_01",
+          id: "e01f6ec0-e251-4b13-9876-000000000001",
+          creator_id: "c01f6ec0-e251-4b13-9876-000000000001",
           creator_name: "陳阿明",
           amount: 1500,
           bank_info: "822 中國信託商業銀行 (戶名: 陳阿明 帳號: ***9012)",
@@ -615,6 +708,93 @@ class AppEngine {
         }
       ];
       this.saveWithdrawals();
+    }
+  }
+
+  migrateMockIdsToUUIDs() {
+    const idMap = {
+      'usr_creator_01': 'c01f6ec0-e251-4b13-9876-000000000001',
+      'usr_seller_01': 'c01f6ec0-e251-4b13-9876-000000000002',
+      'usr_admin': 'c01f6ec0-e251-4b13-9876-000000000003',
+      'prod_01': 'd01f6ec0-e251-4b13-9876-000000000001',
+      'prod_02': 'd01f6ec0-e251-4b13-9876-000000000002',
+      'prod_03': 'd01f6ec0-e251-4b13-9876-000000000003',
+      'wtd_01': 'e01f6ec0-e251-4b13-9876-000000000001'
+    };
+
+    const isUUID = (str) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str || '');
+
+    const getUUID = (oldId) => {
+      if (!oldId) return this.generateUUID();
+      if (isUUID(oldId)) return oldId;
+      if (idMap[oldId]) return idMap[oldId];
+      return this.generateUUID();
+    };
+
+    let changed = false;
+
+    // 1. Users
+    if (this.users && Array.isArray(this.users)) {
+      this.users.forEach(u => {
+        if (u && u.id && !isUUID(u.id)) {
+          u.id = getUUID(u.id);
+          changed = true;
+        }
+      });
+    }
+
+    // 2. Products
+    if (this.products && Array.isArray(this.products)) {
+      this.products.forEach(p => {
+        if (p) {
+          if (p.id && !isUUID(p.id)) {
+            p.id = getUUID(p.id);
+            changed = true;
+          }
+          if (p.creator_id && !isUUID(p.creator_id)) {
+            p.creator_id = getUUID(p.creator_id);
+            changed = true;
+          }
+        }
+      });
+    }
+
+    // 3. Withdrawals
+    if (this.withdrawals && Array.isArray(this.withdrawals)) {
+      this.withdrawals.forEach(w => {
+        if (w) {
+          if (w.id && !isUUID(w.id)) {
+            w.id = getUUID(w.id);
+            changed = true;
+          }
+          if (w.creator_id && !isUUID(w.creator_id)) {
+            w.creator_id = getUUID(w.creator_id);
+            changed = true;
+          }
+        }
+      });
+    }
+
+    // 4. Current User Session
+    if (this.currentUser) {
+      if (this.currentUser.id && !isUUID(this.currentUser.id)) {
+        this.currentUser.id = getUUID(this.currentUser.id);
+        localStorage.setItem('app_session', this.currentUser.id);
+        changed = true;
+      }
+    } else {
+      const session = localStorage.getItem('app_session');
+      if (session && !isUUID(session)) {
+        localStorage.setItem('app_session', getUUID(session));
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      localStorage.setItem('app_users', JSON.stringify(this.users));
+      localStorage.setItem('app_products', JSON.stringify(this.products));
+      localStorage.setItem('app_withdrawals', JSON.stringify(this.withdrawals));
+      console.log("LocalStorage IDs successfully migrated to UUID formats!");
     }
   }
 
@@ -680,6 +860,13 @@ class AppEngine {
     if (session) {
       const user = this.users.find(u => u.id === session);
       if (user) {
+        if (user.role === 'admin' || (user.roles && user.roles.includes('admin')) || user.id === 'c01f6ec0-e251-4b13-9876-000000000003') {
+          if (sessionStorage.getItem('admin_authenticated') !== 'true') {
+            console.log("Admin session found but not authenticated in this session. Requiring password verification.");
+            localStorage.removeItem('app_session');
+            return;
+          }
+        }
         this.currentUser = user;
       }
     }
@@ -719,6 +906,16 @@ class AppEngine {
       alert("請先完成註冊或登入後，即可開啟此版塊！");
       this.openAuthModal('register');
       return;
+    }
+
+    // Role protection for admin backend
+    if (viewId === 'admin') {
+      const isAdmin = this.currentUser && (this.currentUser.role === 'admin' || (this.currentUser.roles && this.currentUser.roles.includes('admin')) || this.currentUser.id === 'c01f6ec0-e251-4b13-9876-000000000003' || this.currentUser.id === 'usr_admin');
+      if (!isAdmin) {
+        alert("🔒 存取拒絕：您沒有管理員權限！");
+        this.navigate('home');
+        return;
+      }
     }
 
     // Pull latest data from Supabase before rendering to ensure real-time sync across devices
@@ -1018,7 +1215,7 @@ class AppEngine {
     const defaultRole = roles[0]; // Set first selected role as default active role
 
     const newUser = {
-      id: "usr_" + Math.random().toString(36).substring(2, 11),
+      id: this.generateUUID(),
       name,
       phone,
       email,
@@ -1617,7 +1814,7 @@ class AppEngine {
       const category = categoryEl ? categoryEl.value : 'others';
 
       const newProduct = {
-        id: "prod_" + Math.random().toString(36).substring(2, 11),
+        id: this.generateUUID(),
         creator_id: this.currentUser.id,
         creator_name: this.currentUser.name,
         name,
@@ -1731,7 +1928,7 @@ class AppEngine {
 
     // Create withdrawal log
     const newWithdrawal = {
-      id: "wtd_" + Math.random().toString(36).substring(2, 11),
+      id: this.generateUUID(),
       creator_id: this.currentUser.id,
       creator_name: this.currentUser.name,
       amount,
@@ -2438,6 +2635,29 @@ class AppEngine {
     this.renderAdminPanels();
   }
 
+  async adminManualSync(btn) {
+    let originalHtml = "";
+    if (btn) {
+      originalHtml = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 同步中...`;
+    }
+
+    try {
+      await this.loadState();
+      this.renderAdminPanels();
+      this.triggerCloudSyncToast("後台資料同步成功！");
+    } catch (err) {
+      console.error("Manual sync failed:", err);
+      alert(`❌ 同步失敗：${err.message || err}`);
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+      }
+    }
+  }
+
   renderAdminPanels() {
     // 1. Pending counts
     const pendingProds = this.products.filter(p => p.status === 'pending');
@@ -2497,6 +2717,9 @@ class AppEngine {
               });
             }
           }
+
+          const catObj = SHOPEE_CATEGORIES.find(c => c.id === p.category);
+          const catName = catObj ? catObj.name : "其他類別";
 
           card.innerHTML = `
             <div class="pending-item-header">

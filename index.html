@@ -912,11 +912,18 @@
     <!-- 4. ADMIN BACKEND VIEW (後台管理) -->
     <section id="view-admin" class="app-view hidden">
       <div class="view-header">
-        <div class="welcome-box admin-bg">
-          <span class="user-avatar-tag admin-badge"><i class="fa-solid fa-user-gear"></i> 後台系統</span>
+        <div class="welcome-box admin-bg" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+          <div style="display: flex; align-items: center; gap: 16px;">
+            <span class="user-avatar-tag admin-badge"><i class="fa-solid fa-user-gear"></i> 後台系統</span>
+            <div>
+              <h2>素材交易所控制中心</h2>
+              <p>審核創作者上傳的影片分鏡、批准提領款項、並管理使用者資料與點數。</p>
+            </div>
+          </div>
           <div>
-            <h2>素材交易所控制中心</h2>
-            <p>審核創作者上傳的影片分鏡、批准提領款項、並管理使用者資料與點數。</p>
+            <button class="btn btn-sm btn-outline-white" onclick="app.adminManualSync(this)" style="display: flex; align-items: center; gap: 6px; font-weight: 700;">
+              <i class="fa-solid fa-arrows-rotate"></i> 刷新同步雲端資料
+            </button>
           </div>
         </div>
       </div>
@@ -1206,6 +1213,11 @@
             <input type="tel" id="login-phone" placeholder="請輸入註冊的電話號碼 (如: 0912345678)" required>
           </div>
           <button type="submit" class="btn btn-primary w-100 btn-lg mt-3">一鍵登入</button>
+          <div class="text-center mt-4 pt-2" style="border-top: 1px dashed var(--border-light);">
+            <span style="font-size: 13px; color: var(--text-muted); cursor: pointer; transition: var(--transition-smooth);" onmouseover="this.style.color='var(--color-danger)'" onmouseout="this.style.color='var(--text-muted)'" onclick="app.openAdminSecureModal()">
+              <i class="fa-solid fa-user-shield"></i> 管理員登入通道
+            </span>
+          </div>
         </form>
       </div>
     </div>

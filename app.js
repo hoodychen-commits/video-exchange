@@ -433,8 +433,25 @@ class AppEngine {
         }
       });
       
-      const storedAdmin = this.users.find(u => u.id === 'usr_admin');
-      if (storedAdmin) {
+      let storedAdmin = this.users.find(u => u.id === 'usr_admin');
+      if (!storedAdmin) {
+        storedAdmin = {
+          id: "usr_admin",
+          name: "超級管理員",
+          phone: "admin_secure_credential_102948",
+          email: "admin@material.exchange",
+          roles: ["admin"],
+          role: "admin",
+          level: 10,
+          balance: 99999,
+          seller_credits: 99999,
+          total_earnings: 99999,
+          passwordHash: "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9",
+          created_at: new Date().toISOString()
+        };
+        this.users.push(storedAdmin);
+        this.saveUsers();
+      } else {
         let changed = false;
         if (storedAdmin.phone !== 'admin_secure_credential_102948') {
           storedAdmin.phone = 'admin_secure_credential_102948';

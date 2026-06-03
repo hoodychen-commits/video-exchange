@@ -1933,7 +1933,11 @@ class AppEngine {
               <i class="fa-solid fa-download"></i> ${p.downloads_count || 0} 次
             </span>
           </td>
-          <td class="text-muted" style="padding: 12px 8px; vertical-align: middle; font-size: 11px;">${dateStr}</td>
+          <td style="color: var(--text-muted); font-size: 12px;">${dateStr}</td>
+          <td>
+            <button class="btn btn-sm btn-outline" style="padding: 4px 8px; font-size: 11px;" onclick="event.stopPropagation(); app.openProductDetailModal('${p.id}')">檢視</button>
+            ${p.status === 'pending' || p.status === 'rejected' ? `<button class="btn btn-sm btn-outline text-danger" style="padding: 4px 8px; font-size: 11px; margin-left: 4px;" onclick="event.stopPropagation(); app.creatorDeleteProduct('${p.id}')">刪除</button>` : ''}
+          </td>
         </tr>
       `;
     });
@@ -3244,25 +3248,55 @@ class AppEngine {
     this.renderAdminPanels();
   }
 
-  adminEditProductTitle(productId) {
+  adminEditProduct(productId) {
     const p = this.products.find(x => x.id === productId);
     if (!p) return;
 
-    const newTitle = prompt("請輸入商品的新標題：", p.name);
-    if (newTitle === null) return; // cancelled
+    const newName = prompt("請輸入商品的新標題：", p.name);
+    if (newName === null) return;
+    
+    const newPhoto = prompt("請輸入商品的新封面圖片網址 (不更改請直接按確定)：", p.photo_url || "");
+    if (newPhoto === null) return;
 
-    const trimmedTitle = newTitle.trim();
-    if (!trimmedTitle) {
-      alert("標題不能為空！");
+    if (newName.trim() !== '') p.name = newName.trim();
+    if (newPhoto.trim() !== '') p.photo_url = newPhoto.trim();
+
+    this.saveProducts();
+
+    this.triggerCloudSyncToast("商品資訊已更新成功！");
+    this.renderAdminPanels();
+    this.renderProducts(); // Update landing lists
+  }
+
+  async creatorDeleteProduct(productId) {
+    const p = this.products.find(x => x.id === productId);
+    if (!p) return;
+
+    if (p.status === 'approved') {
+      alert("⚠️ 錯誤：已上架的商品無法自行刪除，請聯繫管理員！");
       return;
     }
 
-    p.name = trimmedTitle;
-    this.saveProducts();
+    if (!confirm("⚠️ 確定要刪除這筆上傳的商品素材嗎？刪除後將無法復原！")) return;
+    
+    if (this.isCloudMode) {
+      try {
+        const { error } = await this.supabase.from('products').delete().eq('id', productId);
+        if (error) {
+          alert(`⚠️ 雲端刪除失敗：${error.message}`);
+          return;
+        }
+      } catch (err) {
+        alert(`⚠️ 雲端刪除出錯：${err.message || err}`);
+        return;
+      }
+    }
 
-    this.triggerCloudSyncToast("商品標題已更新成功！");
-    this.renderAdminPanels();
-    this.renderProducts(); // Update landing lists
+    this.products = this.products.filter(p => p.id !== productId);
+    await this.saveProducts();
+    this.triggerCloudSyncToast("商品素材已成功刪除！");
+    this.renderCreatorProductsList();
+    if (typeof this.renderAdminPanels === 'function') this.renderAdminPanels();
   }
 
   adminDeleteProductScene(productId, sceneKey, index) {
@@ -3453,8 +3487,8 @@ class AppEngine {
                 <div class="pending-product-meta">
                   <h4 style="display: flex; align-items: center; gap: 8px;">
                     <span>${p.name}</span>
-                    <button class="btn btn-sm btn-outline" style="padding: 2px 6px; font-size: 11px; height: auto; display: inline-flex; align-items: center; gap: 4px;" onclick="app.adminEditProductTitle('${p.id}')">
-                      <i class="fa-regular fa-pen-to-square"></i> 編輯標題
+                    <button class="btn btn-sm btn-outline" style="padding: 2px 6px; font-size: 11px; height: auto; display: inline-flex; align-items: center; gap: 4px;" onclick="app.adminEditProduct('${p.id}')">
+                      <i class="fa-solid fa-pen-to-square"></i> 編輯商品
                     </button>
                     <button class="btn btn-sm btn-outline text-danger" style="padding: 2px 6px; font-size: 11px; height: auto; display: inline-flex; align-items: center; gap: 4px;" onclick="app.adminDeleteProduct('${p.id}')">
                       <i class="fa-solid fa-trash-can"></i> 刪除商品

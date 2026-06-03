@@ -492,21 +492,19 @@ class AppEngine {
             if (!u.role) {
               u.role = u.roles[0];
             }
-            // Sync seller_credits from database
             const isSeller = u.role === 'seller' || u.roles.includes('seller');
             const isCreator = u.role === 'creator' || u.roles.includes('creator');
-            // Fix: use null check (not just undefined) since DB returns null for missing values
-            if (u.seller_credits === undefined || u.seller_credits === null) {
-              // Only migrate from balance for pure sellers (no creator role) — avoid polluting creator earnings
-              u.seller_credits = (isSeller && !isCreator) ? (Number(u.balance) || 0) : 0;
-            } else {
-              // seller_credits already loaded correctly from DB — keep it as-is
-              u.seller_credits = Number(u.seller_credits) || 0;
-            }
-            // For safety, clear balance for absolute sellers to avoid UI overlaps
-            // NOTE: do NOT clear balance for creator+seller dual roles (balance = creator earnings)
-            if (isSeller && !isCreator) {
-              u.balance = 0;
+            // DB has no seller_credits column — balance is the backing store for seller points
+            // Always read seller_credits from balance for sellers
+            if (isSeller) {
+              u.seller_credits = Number(u.balance) || 0;
+              // Clear balance for pure sellers to avoid UI confusion
+              if (!isCreator) {
+                u.balance = 0;
+              }
+            } else if (!isSeller) {
+              // Non-sellers: seller_credits should be 0
+              u.seller_credits = 0;
             }
           }
           return u;
@@ -862,13 +860,14 @@ class AppEngine {
       let retryUsers = JSON.parse(JSON.stringify(this.users)).filter(u => u !== null).map(u => {
         const isSeller = u.role === 'seller' || (u.roles && u.roles.includes('seller'));
         const isCreator = u.role === 'creator' || (u.roles && u.roles.includes('creator'));
-        if (isSeller && !isCreator) {
-          // Pure seller: sync balance = seller_credits for DB compatibility (balance used as fallback column)
-          u.balance = u.seller_credits || 0;
-        }
-        // Always ensure seller_credits is explicitly set (never undefined/null) so DB stores the correct value
         if (isSeller) {
-          u.seller_credits = Number(u.seller_credits) || 0;
+          // DB has no seller_credits column — always write seller_credits into balance for sellers
+          // For dual-role (creator+seller), we can't use balance (that's earnings)
+          // So pure sellers: balance = seller_credits
+          // Dual-role: just skip — they rely on in-memory + localStorage for seller_credits
+          if (!isCreator) {
+            u.balance = Number(u.seller_credits) || 0;
+          }
         }
         return u;
       });

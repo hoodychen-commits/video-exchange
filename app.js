@@ -1268,11 +1268,11 @@ class AppEngine {
   renderUserGreeters() {
     if (!this.currentUser) return;
 
-    if (this.currentUser.role === 'creator') {
+    if (this.activeView === 'creator') {
       const greet = document.getElementById('creator-greeting');
       if (greet) greet.innerText = `您好，創作者 ${this.currentUser.name}！`;
       this.renderCreatorStats();
-    } else if (this.currentUser.role === 'seller') {
+    } else if (this.activeView === 'seller') {
       const greet = document.getElementById('seller-greeting');
       if (greet) greet.innerText = `您好，帶貨主播 ${this.currentUser.name}！`;
       this.renderSellerStats();
@@ -1498,7 +1498,7 @@ class AppEngine {
   // 5. CREATOR ECOSYSTEM (Uploads, Tiers, Leaderboard)
   // --------------------------------------------------
   renderCreatorStats() {
-    if (!this.currentUser || this.currentUser.role !== 'creator') return;
+    if (!this.currentUser) return;
 
     // Recalculate Creator Level dynamically
     this.recalculateCreatorLevel();
@@ -2249,7 +2249,7 @@ class AppEngine {
   // 6. SELLER PORTAL (帶貨神器: Download logic & top-up)
   // --------------------------------------------------
   renderSellerStats() {
-    if (!this.currentUser || this.currentUser.role !== 'seller') return;
+    if (!this.currentUser) return;
 
     // Re-sync seller_credits from the users array to pick up admin changes
     const freshUser = this.users.find(u => u.id === this.currentUser.id);

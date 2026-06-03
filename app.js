@@ -1236,11 +1236,14 @@ class AppEngine {
             }
             if (isSeller) {
               if (!isCreator) {
-                dbU.seller_credits = Number(dbU.balance) || 0;
+                const cloudCredits = Number(dbU.balance) || 0;
+                const localCredits = idx >= 0 ? this.users[idx].seller_credits : cloudCredits;
+                dbU.seller_credits = Math.min(cloudCredits, localCredits ?? cloudCredits);
                 dbU.balance = 0;
               } else {
                 if (decodedSc !== null && !isNaN(decodedSc)) {
-                  dbU.seller_credits = decodedSc;
+                  const localCredits = idx >= 0 ? this.users[idx].seller_credits : decodedSc;
+                  dbU.seller_credits = Math.min(decodedSc, localCredits ?? decodedSc);
                 } else {
                   // Keep the local in-memory value if cloud doesn't have a decoded value
                   if (idx >= 0 && this.users[idx].seller_credits !== undefined) {

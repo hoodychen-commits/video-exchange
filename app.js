@@ -1971,7 +1971,8 @@ class AppEngine {
           <td style="color: var(--text-muted); font-size: 12px;">${dateStr}</td>
           <td>
             <button class="btn btn-sm btn-outline" style="padding: 4px 8px; font-size: 11px;" onclick="event.stopPropagation(); app.openProductDetailModal('${p.id}')">檢視</button>
-            ${p.status === 'pending' || p.status === 'rejected' ? `<button class="btn btn-sm btn-outline text-danger" style="padding: 4px 8px; font-size: 11px; margin-left: 4px;" onclick="event.stopPropagation(); app.creatorDeleteProduct('${p.id}')">刪除</button>` : ''}
+            <button class="btn btn-sm btn-outline" style="padding: 4px 8px; font-size: 11px; margin-left: 4px;" onclick="event.stopPropagation(); app.editProduct('${p.id}')">編輯</button>
+            <button class="btn btn-sm btn-outline text-danger" style="padding: 4px 8px; font-size: 11px; margin-left: 4px;" onclick="event.stopPropagation(); app.creatorDeleteProduct('${p.id}')">刪除</button>
           </td>
         </tr>
       `;
@@ -3290,7 +3291,7 @@ class AppEngine {
     this.renderAdminPanels();
   }
 
-  adminEditProduct(productId) {
+  editProduct(productId) {
     const p = this.products.find(x => x.id === productId);
     if (!p) return;
 
@@ -3303,11 +3304,14 @@ class AppEngine {
     if (newName.trim() !== '') p.name = newName.trim();
     if (newPhoto.trim() !== '') p.photo_url = newPhoto.trim();
 
-    this.saveProducts([p]);
-
-    this.triggerCloudSyncToast("商品資訊已更新成功！");
-    this.renderAdminPanels();
-    this.renderProducts(); // Update landing lists
+    this.saveProducts([p]).then(success => {
+      if (success) {
+        this.triggerCloudSyncToast("商品資訊已更新成功！");
+        if (typeof this.renderAdminPanels === 'function') this.renderAdminPanels();
+        if (typeof this.renderCreatorProductsList === 'function') this.renderCreatorProductsList();
+        this.renderProducts(); // Update landing lists
+      }
+    });
   }
 
   async creatorDeleteProduct(productId) {
@@ -3508,7 +3512,7 @@ class AppEngine {
                 <div class="pending-product-meta">
                   <h4 style="display: flex; align-items: center; gap: 8px;">
                     <span>${p.name}</span>
-                    <button class="btn btn-sm btn-outline" style="padding: 2px 6px; font-size: 11px; height: auto; display: inline-flex; align-items: center; gap: 4px;" onclick="app.adminEditProduct('${p.id}')">
+                    <button class="btn btn-sm btn-outline" style="padding: 2px 6px; font-size: 11px; height: auto; display: inline-flex; align-items: center; gap: 4px;" onclick="app.editProduct('${p.id}')">
                       <i class="fa-solid fa-pen-to-square"></i> 編輯商品
                     </button>
                     <button class="btn btn-sm btn-outline text-danger" style="padding: 2px 6px; font-size: 11px; height: auto; display: inline-flex; align-items: center; gap: 4px;" onclick="app.adminDeleteProduct('${p.id}')">

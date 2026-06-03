@@ -2942,8 +2942,10 @@ class AppEngine {
             <div style="display:flex; gap:6px;">
               <button class="btn btn-sm btn-outline" onclick="app.adminModifyUserCredits('${u.id}', 100)">+100 點</button>
               <button class="btn btn-sm btn-outline" onclick="app.adminModifyUserCredits('${u.id}', 1000)">+1000 點</button>
-              ${u.role === 'creator' ? `<button class="btn btn-sm btn-outline" onclick="app.adminModifyUserLevel('${u.id}', 1)">升 1 級</button>` : ''}
-              ${u.role !== 'admin' ? `<button class="btn btn-sm btn-outline text-danger" onclick="app.adminDeleteUser('${u.id}')"><i class="fa-solid fa-trash-can"></i></button>` : ''}
+              <button class="btn btn-sm btn-outline text-danger" onclick="app.adminModifyUserCredits('${u.id}', -100)">-100 點</button>
+              <button class="btn btn-sm btn-outline text-danger" onclick="app.adminModifyUserCredits('${u.id}', -1000)">-1000 點</button>
+              ${(u.role === 'creator' || (u.roles && u.roles.includes('creator'))) ? `<button class="btn btn-sm btn-outline" onclick="app.adminModifyUserLevel('${u.id}', 1)">升 1 級</button>` : ''}
+              ${(u.role !== 'admin' && (!u.roles || !u.roles.includes('admin'))) ? `<button class="btn btn-sm btn-outline text-danger" onclick="app.adminDeleteUser('${u.id}')"><i class="fa-solid fa-trash-can"></i></button>` : ''}
             </div>
           </td>
         `;
@@ -3042,10 +3044,11 @@ class AppEngine {
     if (!u) return;
 
     // If they have seller role, recharge points. Otherwise recharge cash.
-    if (u.roles && u.roles.includes('seller')) {
-      u.seller_credits += change;
+    const isSeller = u.role === 'seller' || (u.roles && u.roles.includes('seller'));
+    if (isSeller) {
+      u.seller_credits = Math.max(0, (Number(u.seller_credits) || 0) + change);
     } else {
-      u.balance += change;
+      u.balance = Math.max(0, (Number(u.balance) || 0) + change);
     }
     this.saveUsers();
     

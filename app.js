@@ -492,13 +492,19 @@ class AppEngine {
             if (!u.role) {
               u.role = u.roles[0];
             }
-            // Sync seller_credits from database balance column for seller role
+            // Sync seller_credits from database
             const isSeller = u.role === 'seller' || u.roles.includes('seller');
             const isCreator = u.role === 'creator' || u.roles.includes('creator');
-            if (u.seller_credits === undefined) {
+            // Fix: use null check (not just undefined) since DB returns null for missing values
+            if (u.seller_credits === undefined || u.seller_credits === null) {
+              // Only migrate from balance for pure sellers (no creator role) — avoid polluting creator earnings
               u.seller_credits = (isSeller && !isCreator) ? (Number(u.balance) || 0) : 0;
+            } else {
+              // seller_credits already loaded correctly from DB — keep it as-is
+              u.seller_credits = Number(u.seller_credits) || 0;
             }
             // For safety, clear balance for absolute sellers to avoid UI overlaps
+            // NOTE: do NOT clear balance for creator+seller dual roles (balance = creator earnings)
             if (isSeller && !isCreator) {
               u.balance = 0;
             }
@@ -572,11 +578,16 @@ class AppEngine {
         if (!u.role) {
           u.role = u.roles[0];
         }
-        if (u.seller_credits === undefined) {
-          u.seller_credits = u.role === 'seller' ? (u.balance || 0) : 0;
-          if (u.role === 'seller') {
+        if (u.seller_credits === undefined || u.seller_credits === null) {
+          const isSeller = u.role === 'seller' || (u.roles && u.roles.includes('seller'));
+          const isCreator = u.role === 'creator' || (u.roles && u.roles.includes('creator'));
+          // Only migrate from balance for pure sellers to avoid polluting creator earnings
+          u.seller_credits = (isSeller && !isCreator) ? (u.balance || 0) : 0;
+          if (isSeller && !isCreator) {
             u.balance = 0;
           }
+        } else {
+          u.seller_credits = Number(u.seller_credits) || 0;
         }
       });
       
@@ -850,8 +861,14 @@ class AppEngine {
     if (this.isCloudMode) {
       let retryUsers = JSON.parse(JSON.stringify(this.users)).filter(u => u !== null).map(u => {
         const isSeller = u.role === 'seller' || (u.roles && u.roles.includes('seller'));
-        if (isSeller) {
+        const isCreator = u.role === 'creator' || (u.roles && u.roles.includes('creator'));
+        if (isSeller && !isCreator) {
+          // Pure seller: sync balance = seller_credits for DB compatibility (balance used as fallback column)
           u.balance = u.seller_credits || 0;
+        }
+        // Always ensure seller_credits is explicitly set (never undefined/null) so DB stores the correct value
+        if (isSeller) {
+          u.seller_credits = Number(u.seller_credits) || 0;
         }
         return u;
       });
@@ -1388,11 +1405,16 @@ class AppEngine {
     if (!user.role) {
       user.role = user.roles[0];
     }
-    if (user.seller_credits === undefined) {
-      user.seller_credits = user.role === 'seller' ? (user.balance || 0) : 0;
-      if (user.role === 'seller') {
+    if (user.seller_credits === undefined || user.seller_credits === null) {
+      const isSeller = user.role === 'seller' || (user.roles && user.roles.includes('seller'));
+      const isCreator = user.role === 'creator' || (user.roles && user.roles.includes('creator'));
+      // Only migrate from balance for pure sellers to avoid polluting creator earnings
+      user.seller_credits = (isSeller && !isCreator) ? (user.balance || 0) : 0;
+      if (isSeller && !isCreator) {
         user.balance = 0;
       }
+    } else {
+      user.seller_credits = Number(user.seller_credits) || 0;
     }
 
     this.currentUser = user;
@@ -2936,15 +2958,17 @@ class AppEngine {
           roleBadge = u.role === 'seller' ? `<span class="badge bg-seller"><i class="fa-solid fa-wand-magic-sparkles"></i> 帶貨主播</span>` : `<span class="badge bg-creator"><i class="fa-solid fa-video"></i> 創作者</span>`;
         }
 
+        const _isCreator = u.role === 'creator' || (u.roles && u.roles.includes('creator'));
+        const _isSeller = u.role === 'seller' || (u.roles && u.roles.includes('seller'));
         let balLabel = '';
-        if (u.roles && u.roles.includes('creator')) {
+        if (_isCreator) {
           balLabel += `收益: $${(Number(u.balance) || 0).toFixed(2)} TWD<br>`;
         }
-        if (u.roles && u.roles.includes('seller')) {
-          balLabel += `積分: ${u.seller_credits || 0} 點`;
+        if (_isSeller) {
+          balLabel += `積分: ${Number(u.seller_credits) || 0} 點`;
         }
         if (!balLabel) {
-          balLabel = u.role === 'seller' ? `${u.seller_credits || 0} 積分` : `TWD $${(Number(u.balance) || 0).toFixed(2)}`;
+          balLabel = `TWD $${(Number(u.balance) || 0).toFixed(2)}`;
         }
 
         let lvlLabel = u.roles && u.roles.includes('creator') ? `LV.${u.level} 分成` : `LV.${u.level} 一般`;
@@ -2967,19 +2991,7 @@ class AppEngine {
           `;
         }
 
-        if (hasCreator) {
-          modifyButtonsHtml += `
-            <div style="display:flex; flex-direction:column; gap:4px; border:1px solid rgba(99,102,241,0.2); padding:6px; border-radius:4px; background:rgba(99,102,241,0.02); min-width:180px; margin-top:${hasSeller ? '4px' : '0'};">
-              <span style="font-size:10px; font-weight:700; color:var(--color-creator);">[管理創作者收益]</span>
-              <div style="display:flex; gap:4px; flex-wrap:wrap;">
-                <button class="btn btn-sm btn-outline" style="padding:2px 6px; font-size:11px; height:auto;" onclick="app.adminModifyUserCredits('${u.id}', 100, 'balance')">+$100 收益</button>
-                <button class="btn btn-sm btn-outline" style="padding:2px 6px; font-size:11px; height:auto;" onclick="app.adminModifyUserCredits('${u.id}', 1000, 'balance')">+$1000 收益</button>
-                <button class="btn btn-sm btn-outline text-danger" style="padding:2px 6px; font-size:11px; height:auto; border-color:rgba(239,68,68,0.2);" onclick="app.adminModifyUserCredits('${u.id}', -100, 'balance')">-$100 收益</button>
-                <button class="btn btn-sm btn-outline text-danger" style="padding:2px 6px; font-size:11px; height:auto; border-color:rgba(239,68,68,0.2);" onclick="app.adminModifyUserCredits('${u.id}', -1000, 'balance')">-$1000 收益</button>
-              </div>
-            </div>
-          `;
-        }
+
 
         row.innerHTML = `
           <td><b>${u.name}</b></td>

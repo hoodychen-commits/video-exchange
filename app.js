@@ -1198,12 +1198,42 @@ class AppEngine {
       try {
         let { data: dbUsers } = await this.supabase.from('users').select('*');
         if (dbUsers && dbUsers.length > 0) {
-          // Merge users: update credits/balance from cloud, keep local data for anything missing
+          // Merge users: update from cloud, but properly decode seller_credits
           dbUsers.forEach(dbU => {
+            if (!dbU) return;
             const idx = this.users.findIndex(u => u.id === dbU.id);
+            // Normalize passwordhash casing
+            if (dbU.passwordhash && !dbU.passwordHash) dbU.passwordHash = dbU.passwordhash;
+            if (dbU.passwordHash && !dbU.passwordhash) dbU.passwordhash = dbU.passwordHash;
+            if (!dbU.roles) dbU.roles = [dbU.role || 'creator'];
+            if (!dbU.role) dbU.role = dbU.roles[0];
+
+            // Decode seller_credits properly (same logic as loadState)
+            const isSeller = dbU.role === 'seller' || (dbU.roles && dbU.roles.includes('seller'));
+            const isCreator = dbU.role === 'creator' || (dbU.roles && dbU.roles.includes('creator'));
+            let decodedSc = null;
+            if (dbU.email && typeof dbU.email === 'string' && dbU.email.includes('|SC:')) {
+              const parts = dbU.email.split('|SC:');
+              dbU.email = parts[0];
+              decodedSc = parseInt(parts[1], 10);
+            }
+            if (isSeller) {
+              if (!isCreator) {
+                dbU.seller_credits = Number(dbU.balance) || 0;
+                dbU.balance = 0;
+              } else {
+                if (decodedSc !== null && !isNaN(decodedSc)) {
+                  dbU.seller_credits = decodedSc;
+                } else {
+                  // Keep the local in-memory value if cloud doesn't have a decoded value
+                  if (idx >= 0 && this.users[idx].seller_credits !== undefined) {
+                    dbU.seller_credits = this.users[idx].seller_credits;
+                  }
+                }
+              }
+            }
+
             if (idx >= 0) {
-              // Normalize passwordhash casing
-              if (dbU.passwordhash && !dbU.passwordHash) dbU.passwordHash = dbU.passwordhash;
               this.users[idx] = Object.assign({}, this.users[idx], dbU);
             } else {
               this.users.push(dbU);
@@ -2826,7 +2856,7 @@ class AppEngine {
   }
 
   // Point deduction implementation (charges 5 points per item download)
-  deductCredits() {
+  async deductCredits() {
     if (!this.currentUser) return false;
     
     // Admin role check: Admin pays nothing and is NOT counted in downloads/royalties
@@ -2854,7 +2884,6 @@ class AppEngine {
     const sellerIdx = this.users.findIndex(u => u.id === this.currentUser.id);
     if (sellerIdx !== -1) {
       this.users[sellerIdx] = this.currentUser;
-      this.saveUsers();
     }
 
     // Reward Creator! 10 downloads = 3 TWD standard, scaled by level!
@@ -2867,17 +2896,19 @@ class AppEngine {
         const commissionPerDownload = commissionMap[creator.level] || 1.0;
         creator.balance += commissionPerDownload;
         creator.total_earnings += commissionPerDownload;
-        this.saveUsers();
 
         // Increment download count on product
         product.downloads_count += 1;
         const prodIdx = this.products.findIndex(p => p.id === product.id);
         if (prodIdx !== -1) {
           this.products[prodIdx] = product;
-          this.saveProducts();
         }
       }
     }
+
+    // Await ALL save operations to ensure cloud is updated before user can refresh
+    await this.saveUsers();
+    await this.saveProducts();
 
     // Proactively refresh all UI stats and product lists instantly
     this.renderSellerStats();
@@ -2906,7 +2937,7 @@ class AppEngine {
 
     try {
       // Deduct credits FIRST, then trigger download
-      if (!this.deductCredits()) return;
+      if (!(await this.deductCredits())) return;
       await this.triggerBrowserDownload(url, filename, false);
     } finally {
       if (btn) {
@@ -2941,7 +2972,7 @@ class AppEngine {
     if ((btnDownSel && btnDownSel.disabled) || (btnDownAll && btnDownAll.disabled)) return;
 
     // Deduct credits FIRST before any async work
-    if (!this.deductCredits()) return;
+    if (!(await this.deductCredits())) return;
     
     // Add loading indicator on buttons
     const origSelHtml = btnDownSel ? btnDownSel.innerHTML : '';

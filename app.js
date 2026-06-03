@@ -2050,6 +2050,7 @@ class AppEngine {
       
       this.renderCreatorStats();
       this.renderAdminPanels();
+      this.renderProducts();
     } catch (uploadErr) {
       console.error("Upload failed:", uploadErr);
       alert(`❌ 上傳失敗：${uploadErr.message || uploadErr}\n請確保您的 Supabase 專案已經創立了名為 'product-photos' 與 'product-videos' 且設定為公開 (Public) 的 Storage 儲存桶。`);
@@ -2390,7 +2391,7 @@ class AppEngine {
       card.innerHTML = `
         <div class="product-img-aspect-box">
           <img src="${p.photo_url}" alt="${p.name}">
-          ${p.is_quality ? `<span class="quality-badge-shopee"><i class="fa-solid fa-gem"></i> 高品質</span>` : ''}
+          ${p.is_quality ? `<span class="quality-badge-shopee" title="高品質 (3~5秒分鏡、至少6個分鏡不重複、下載超過100次)"><i class="fa-solid fa-gem"></i> 高品質</span>` : ''}
           <span class="scenes-count-pill"><i class="fa-solid fa-film"></i> ${videoCount}分鏡</span>
         </div>
         <div class="product-card-body">
@@ -2521,7 +2522,10 @@ class AppEngine {
     const sceneList = document.getElementById('modal-scenes-list');
 
     // Populate data
-    nameEl.innerText = p.name;
+    nameEl.innerHTML = p.name;
+    if (p.is_quality) {
+      nameEl.innerHTML += ` <span class="quality-badge-shopee" style="font-size: 14px; vertical-align: middle; margin-left: 10px; display: inline-block; padding: 4px 8px; border-radius: 4px; background: #fff0f0; color: #d0011b; border: 1px solid #d0011b;"><i class="fa-solid fa-gem"></i> 高品質 (3~5秒分鏡、至少6個分鏡不重複、下載超過100次)</span>`;
+    }
     photoEl.src = p.photo_url;
     photoEl.classList.remove('hidden');
     playerBox.classList.add('hidden');

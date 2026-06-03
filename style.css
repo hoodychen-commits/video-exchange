@@ -2427,9 +2427,19 @@ video.private-blur {
   transition: var(--transition-smooth);
 }
 
-.scene-show-card:hover .scene-show-visual {
-  background-color: var(--color-creator-light);
-  color: var(--color-creator);
+.scene-show-visual video {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 1;
+}
+
+.scene-show-visual i {
+  position: relative;
+  z-index: 2;
 }
 
 .visual-play-badge {
@@ -2443,7 +2453,14 @@ video.private-blur {
   padding: 3px 6px;
   border-radius: 3px;
   letter-spacing: 0.5px;
+  z-index: 3;
 }
+
+.scene-show-card:hover .scene-show-visual {
+  background-color: var(--color-creator-light);
+  color: var(--color-creator);
+}
+
 
 .scene-show-card h4 {
   font-size: 16px;

@@ -90,6 +90,7 @@ class AppEngine {
     this.renderNavigation();
     this.renderProducts();
     this.renderAdminPanels();
+    this.renderHomepageHeroVideos();
     this.startFloatingWatermark();
     
     // Setup Admin Secure Hidden Entry Points
@@ -118,6 +119,49 @@ class AppEngine {
         this.triggerCloudSyncToast(this.isCloudMode ? "雲端資料庫增量同步中..." : "實時雲端資料庫已同步更新...");
       }
     }, 45000);
+  }
+
+  renderHomepageHeroVideos() {
+    const visuals = document.querySelectorAll('.scene-show-visual');
+    if (!visuals || visuals.length === 0) return;
+
+    // Get all approved products that have scenes
+    const approvedProducts = this.products.filter(p => p.status === 'approved' && p.scenes);
+    
+    // For each scene type on the homepage, pick a random video from the pool of approved products
+    visuals.forEach(visual => {
+      const sceneType = visual.getAttribute('data-scene-type');
+      if (!sceneType) return;
+
+      // Gather all videos of this type from all approved products
+      const availableVideos = [];
+      approvedProducts.forEach(p => {
+        if (p.scenes[sceneType] && Array.isArray(p.scenes[sceneType]) && p.scenes[sceneType].length > 0) {
+          availableVideos.push(...p.scenes[sceneType]);
+        }
+      });
+
+      // If we found any videos for this category, pick one randomly and inject a <video> element
+      if (availableVideos.length > 0) {
+        const randomVideo = availableVideos[Math.floor(Math.random() * availableVideos.length)];
+        
+        // Add video element (muted, autoplay, loop, playsinline)
+        const videoEl = document.createElement('video');
+        videoEl.src = randomVideo;
+        videoEl.muted = true;
+        videoEl.autoplay = true;
+        videoEl.loop = true;
+        videoEl.playsInline = true;
+        
+        // Clear previous video if any
+        const existingVideo = visual.querySelector('video');
+        if (existingVideo) {
+          existingVideo.remove();
+        }
+        
+        visual.appendChild(videoEl);
+      }
+    });
   }
 
   // --------------------------------------------------

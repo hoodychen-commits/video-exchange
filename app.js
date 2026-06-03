@@ -2572,18 +2572,27 @@ class AppEngine {
         urls.forEach((url, i) => {
           const row = document.createElement('div');
           row.className = 'scene-select-row';
-          row.onclick = (e) => {
-            if (e.target.tagName !== 'INPUT') {
-              this.playDetailVideo(url, row);
-            }
-          };
           row.innerHTML = `
-            <div class="scene-left-side">
+            <div class="scene-left-side" style="cursor:pointer;">
               <span class="scene-play-icon"><i class="fa-solid fa-circle-play"></i></span>
               <span class="scene-lbl-name">${chineseScenes[key]} (#${i+1})</span>
             </div>
-            <input type="checkbox" name="scene-chk" value="${url}" checked onclick="event.stopPropagation();">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <button class="btn-save-scene" title="儲存此影片到手機相簿" style="background:none;border:1px solid var(--primary);color:var(--primary);border-radius:6px;padding:4px 10px;font-size:13px;cursor:pointer;white-space:nowrap;">
+                <i class="fa-solid fa-arrow-down"></i> 儲存
+              </button>
+              <input type="checkbox" name="scene-chk" value="${url}" checked>
+            </div>
           `;
+          // Play video on click (left side)
+          row.querySelector('.scene-left-side').onclick = () => this.playDetailVideo(url, row);
+          // Save single scene
+          row.querySelector('.btn-save-scene').onclick = (e) => {
+            e.stopPropagation();
+            this.saveSingleScene(url, `${key}_${i+1}.mp4`);
+          };
+          // Stop checkbox from triggering row click
+          row.querySelector('input[type="checkbox"]').onclick = (e) => e.stopPropagation();
           sceneList.appendChild(row);
         });
       }
@@ -2695,6 +2704,28 @@ class AppEngine {
     return true;
   }
 
+  async saveSingleScene(url, filename) {
+    if (!this.deductCredits()) return;
+    
+    // Show loading state on the button that was clicked
+    const btn = event ? event.currentTarget : null;
+    let origHtml = '';
+    if (btn) {
+      origHtml = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 處理中...';
+    }
+
+    try {
+      await this.triggerBrowserDownload(url, filename, false);
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = origHtml;
+      }
+    }
+  }
+
   async downloadSelectedScenes() {
     const checkboxes = document.querySelectorAll('input[name="scene-chk"]:checked');
     if (checkboxes.length === 0) {
@@ -2725,57 +2756,81 @@ class AppEngine {
     if (btnDownAll) { btnDownAll.disabled = true; btnDownAll.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 準備影片中...'; }
 
     try {
-      // Check if we can use Web Share API with multiple files
-      if (navigator.canShare && navigator.share) {
-        try {
-          const filesToShare = [];
-          for (let i = 0; i < checkboxes.length; i++) {
-            const url = checkboxes[i].value;
-            const response = await fetch(url);
-            const blob = await response.blob();
-            let mimeType = blob.type;
-            if (!mimeType || mimeType === 'application/octet-stream' || mimeType.includes('application')) {
-              mimeType = 'video/mp4';
-            }
-            const file = new File([blob], `scene_${i+1}.mp4`, { type: mimeType });
-            filesToShare.push(file);
-          }
-          
-          if (navigator.canShare({ files: filesToShare })) {
-            await navigator.share({
-              files: filesToShare,
-              title: '素材影片下載',
-              text: `共 ${checkboxes.length} 部影片，請選擇「儲存影片」或分享至LINE`
-            });
-            this.closeProductDetailModal();
-            return;
-          } else if (filesToShare.length > 0 && navigator.canShare({ files: [filesToShare[0]] })) {
-            alert("您的裝置不支援一次同時儲存多部影片，將為您儲存第一部影片。\n如需儲存其他影片，請逐一勾選下載，或於影片上長按「儲存影片」。");
-            await navigator.share({
-              files: [filesToShare[0]],
-              title: '素材影片下載',
-              text: `第 1 部影片`
-            });
-            this.closeProductDetailModal();
-            return;
-          }
-        } catch (err) {
-          console.warn("Bulk share failed or cancelled, falling back to individual download:", err);
-          if (err.name === 'AbortError') {
-             // User cancelled, do not fallback
-             return;
-          }
-        }
-      }
+      // Fetch all blobs first
+      const filesToShare = [];
+      let fetchFailed = false;
       
-      // Fallback for PC or if Share fails
-      alert(`🎉 成功扣除 5 積分！系統即將為您打包下載 ${checkboxes.length} 個分鏡素材！\n若瀏覽器彈出「允許下載多個檔案」提示，請務必點選「允許」！`);
       for (let i = 0; i < checkboxes.length; i++) {
         const url = checkboxes[i].value;
-        if (i > 0) await new Promise(resolve => setTimeout(resolve, 1000));
-        this.triggerBrowserDownload(url, `scene_${i+1}.mp4`, true);
+        try {
+          // If Supabase URL, try to append download parameter to help with CORS if any
+          const fetchUrl = url.includes('supabase') && !url.includes('download=') 
+                           ? (url.includes('?') ? `${url}&download=` : `${url}?download=`) 
+                           : url;
+          const response = await fetch(fetchUrl);
+          if (!response.ok) throw new Error("Fetch failed");
+          
+          const blob = await response.blob();
+          let mimeType = blob.type;
+          if (!mimeType || mimeType === 'application/octet-stream' || mimeType.includes('application')) {
+            mimeType = 'video/mp4';
+          }
+          const file = new File([blob], `scene_${i+1}.mp4`, { type: mimeType });
+          filesToShare.push(file);
+        } catch (e) {
+          console.warn("Failed to fetch video for sharing:", e);
+          fetchFailed = true;
+          break; // Stop fetching if one fails (usually CORS)
+        }
       }
-      this.closeProductDetailModal();
+
+      // If we got all files and can share multiple files
+      if (!fetchFailed && filesToShare.length > 0 && navigator.canShare && navigator.canShare({ files: filesToShare })) {
+        try {
+          await navigator.share({
+            files: filesToShare,
+            title: '素材影片下載',
+            text: `共 ${filesToShare.length} 部影片，請選擇「儲存影片」或分享至LINE`
+          });
+          this.closeProductDetailModal();
+          return;
+        } catch (err) {
+          console.warn("Bulk share failed or cancelled:", err);
+          if (err.name === 'AbortError') return; // User cancelled
+        }
+      } 
+      // If sharing all files at once failed or isn't supported, but we can share one by one
+      else if (!fetchFailed && filesToShare.length > 0 && navigator.canShare && navigator.canShare({ files: [filesToShare[0]] })) {
+        alert("您的裝置不支援一次同時儲存多部影片。\n系統將為您「逐一彈出」儲存視窗，請針對每個視窗點擊「儲存影片」。\n若未彈出，請利用列表的「儲存」按鈕單獨下載。");
+        
+        for (let i = 0; i < filesToShare.length; i++) {
+          try {
+            await navigator.share({
+              files: [filesToShare[i]],
+              title: '素材影片下載',
+              text: `第 ${i+1} 部影片`
+            });
+            // Add a small delay between share sheets
+            await new Promise(resolve => setTimeout(resolve, 800));
+          } catch (err) {
+            console.warn("Individual share failed:", err);
+            if (err.name === 'AbortError') break; // Stop the loop if user cancelled
+          }
+        }
+        this.closeProductDetailModal();
+        return;
+      }
+      
+      // Ultimate Fallback: Direct download using <a> tag (works on PC, but on mobile opens in new tab)
+      if (fetchFailed || !navigator.share) {
+        alert(`🎉 成功扣除 5 積分！系統即將為您打包下載 ${checkboxes.length} 個分鏡素材！\n如果影片在新分頁中打開，請點擊右下角「⋮」並選擇下載，或長按影片儲存。`);
+        for (let i = 0; i < checkboxes.length; i++) {
+          const url = checkboxes[i].value;
+          if (i > 0) await new Promise(resolve => setTimeout(resolve, 1000));
+          this.triggerBrowserDownload(url, `scene_${i+1}.mp4`, true);
+        }
+        this.closeProductDetailModal();
+      }
     } finally {
       if (btnDownSel) { btnDownSel.disabled = false; btnDownSel.innerHTML = origSelHtml; }
       if (btnDownAll) { btnDownAll.disabled = false; btnDownAll.innerHTML = origAllHtml; }

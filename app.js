@@ -609,6 +609,24 @@ class AppEngine {
                 }
               }
               if (!cloudHasScenes) {
+                // Try to decode scenes from video_url if it was encoded there (fallback when scenes column is missing)
+                if (p.video_url && typeof p.video_url === 'string' && p.video_url.startsWith('SCENES_JSON:')) {
+                  try {
+                    p.scenes = JSON.parse(p.video_url.substring('SCENES_JSON:'.length));
+                    p.video_url = '';
+                    // Re-check if decoded scenes actually have data
+                    for (const k in p.scenes) {
+                      if (p.scenes[k] && p.scenes[k].length > 0) { cloudHasScenes = true; break; }
+                    }
+                    if (cloudHasScenes) {
+                      console.log(`Restored scenes for product "${p.name}" from encoded video_url field.`);
+                    }
+                  } catch (decodeErr) {
+                    console.warn('Failed to decode SCENES_JSON from video_url:', decodeErr);
+                  }
+                }
+              }
+              if (!cloudHasScenes) {
                 // Cloud lost scenes data — restore from in-memory first (most fresh), then localStorage backup
                 const memVersion = inMemoryProductsMap[p.id];
                 const localVersion = localProductsMap[p.id];
@@ -1021,6 +1039,17 @@ class AppEngine {
             if (!p) return p;
             const copy = Object.assign({}, p);
             missingColumns.forEach(col => delete copy[col]);
+            // CRITICAL: If 'scenes' column is being stripped, encode scenes data into video_url
+            // so it persists in the cloud and can be recovered on next load
+            if (missingColumns.has('scenes') && p.scenes && typeof p.scenes === 'object') {
+              let hasAnyScene = false;
+              for (const k in p.scenes) {
+                if (p.scenes[k] && p.scenes[k].length > 0) { hasAnyScene = true; break; }
+              }
+              if (hasAnyScene) {
+                copy.video_url = 'SCENES_JSON:' + JSON.stringify(p.scenes);
+              }
+            }
             return copy;
           });
 
@@ -2864,18 +2893,20 @@ class AppEngine {
   }
 
   async saveSingleScene(url, filename) {
-    if (!this.deductCredits()) return;
-    
     // Show loading state on the button that was clicked
     const btn = event ? event.currentTarget : null;
     let origHtml = '';
     if (btn) {
+      // Prevent double-clicks while processing
+      if (btn.disabled) return;
       origHtml = btn.innerHTML;
       btn.disabled = true;
       btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 處理中...';
     }
 
     try {
+      // Deduct credits FIRST, then trigger download
+      if (!this.deductCredits()) return;
       await this.triggerBrowserDownload(url, filename, false);
     } finally {
       if (btn) {
@@ -2904,11 +2935,15 @@ class AppEngine {
   }
 
   async processBulkDownload(checkboxes) {
+    // Prevent double-clicks: check if already processing
+    const btnDownSel = document.getElementById('btn-download-selected');
+    const btnDownAll = document.getElementById('btn-download-all');
+    if ((btnDownSel && btnDownSel.disabled) || (btnDownAll && btnDownAll.disabled)) return;
+
+    // Deduct credits FIRST before any async work
     if (!this.deductCredits()) return;
     
     // Add loading indicator on buttons
-    const btnDownSel = document.getElementById('btn-download-selected');
-    const btnDownAll = document.getElementById('btn-download-all');
     const origSelHtml = btnDownSel ? btnDownSel.innerHTML : '';
     const origAllHtml = btnDownAll ? btnDownAll.innerHTML : '';
     if (btnDownSel) { btnDownSel.disabled = true; btnDownSel.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 準備影片中...'; }
@@ -2943,6 +2978,8 @@ class AppEngine {
         }
       }
 
+      let downloadTriggered = false;
+
       // If we got all files and can share multiple files
       if (!fetchFailed && filesToShare.length > 0 && navigator.canShare && navigator.canShare({ files: filesToShare })) {
         try {
@@ -2951,15 +2988,16 @@ class AppEngine {
             title: '素材影片下載',
             text: `共 ${filesToShare.length} 部影片，請選擇「儲存影片」或分享至LINE`
           });
+          downloadTriggered = true;
           this.closeProductDetailModal();
           return;
         } catch (err) {
           console.warn("Bulk share failed or cancelled:", err);
-          if (err.name === 'AbortError') return; // User cancelled
+          if (err.name === 'AbortError') { downloadTriggered = true; return; } // User cancelled (still counts as handled)
         }
       } 
       // If sharing all files at once failed or isn't supported, but we can share one by one
-      else if (!fetchFailed && filesToShare.length > 0 && navigator.canShare && navigator.canShare({ files: [filesToShare[0]] })) {
+      if (!downloadTriggered && !fetchFailed && filesToShare.length > 0 && navigator.canShare && navigator.canShare({ files: [filesToShare[0]] })) {
         alert("您的裝置不支援一次同時儲存多部影片。\n系統將為您「逐一彈出」儲存視窗，請針對每個視窗點擊「儲存影片」。\n若未彈出，請利用列表的「儲存」按鈕單獨下載。");
         
         for (let i = 0; i < filesToShare.length; i++) {
@@ -2976,12 +3014,13 @@ class AppEngine {
             if (err.name === 'AbortError') break; // Stop the loop if user cancelled
           }
         }
+        downloadTriggered = true;
         this.closeProductDetailModal();
         return;
       }
       
-      // Ultimate Fallback: Direct download using <a> tag (works on PC, but on mobile opens in new tab)
-      if (fetchFailed || !navigator.share) {
+      // Fallback: Direct download using <a> tag (works on PC, on mobile opens in new tab)
+      if (!downloadTriggered) {
         alert(`🎉 成功扣除 5 積分！系統即將為您打包下載 ${checkboxes.length} 個分鏡素材！\n如果影片在新分頁中打開，請點擊右下角「⋮」並選擇下載，或長按影片儲存。`);
         for (let i = 0; i < checkboxes.length; i++) {
           const url = checkboxes[i].value;

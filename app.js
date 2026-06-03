@@ -1676,8 +1676,9 @@ class AppEngine {
       let sceneCount = 0;
       if (p.scenes) {
         sceneCount = Object.values(p.scenes).reduce((acc, list) => acc + (list ? list.length : 0), 0);
-      } else {
-        sceneCount = p.video_url ? 1 : 0;
+      }
+      if (sceneCount === 0 && p.video_url) {
+        sceneCount = 1;
       }
 
       // Status badge
@@ -2408,8 +2409,15 @@ class AppEngine {
     grid.innerHTML = '';
     approvedProds.forEach(p => {
       let videoCount = 0;
-      for (const sc in p.scenes) {
-        videoCount += p.scenes[sc].length;
+      if (p.scenes) {
+        for (const sc in p.scenes) {
+          if (p.scenes[sc]) {
+            videoCount += p.scenes[sc].length;
+          }
+        }
+      }
+      if (videoCount === 0 && p.video_url) {
+        videoCount = 1;
       }
 
       // Find category name
@@ -2578,9 +2586,18 @@ class AppEngine {
     };
 
     let count = 0;
-    const safeScenes = p.scenes || {
+    
+    let hasScenes = false;
+    if (p.scenes) {
+      for (const k in p.scenes) {
+        if (p.scenes[k] && p.scenes[k].length > 0) hasScenes = true;
+      }
+    }
+    
+    const safeScenes = hasScenes ? p.scenes : {
       other: p.video_url ? [p.video_url] : []
     };
+
     for (const key in chineseScenes) {
       const urls = safeScenes[key] || [];
       if (urls.length > 0) {

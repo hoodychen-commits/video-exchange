@@ -742,7 +742,7 @@ class AppEngine {
         }
       });
       
-      let storedAdmin = this.users.find(u => u.id === 'c01f6ec0-e251-4b13-9876-000000000003' || u.id === 'usr_admin');
+      let storedAdmin = this.users.find(u => u.role === 'admin' || (u.roles && u.roles.includes('admin')) || u.name === '超級管理員');
       if (!storedAdmin) {
         storedAdmin = {
           id: "c01f6ec0-e251-4b13-9876-000000000003",

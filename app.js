@@ -94,6 +94,20 @@ class AppEngine {
     // Setup Admin Secure Hidden Entry Points
     this.initAdminSecureEntry();
 
+    // Restore active view state across reloads
+    const savedView = localStorage.getItem('app_active_view');
+    if (this.currentUser) {
+      if (savedView) {
+        this.navigate(savedView);
+      } else if (this.currentUser.role === 'admin' || (this.currentUser.roles && this.currentUser.roles.includes('admin'))) {
+        this.navigate('admin');
+      } else {
+        this.navigate(this.currentUser.role);
+      }
+    } else {
+      this.navigate(savedView === 'home' || !savedView ? 'home' : 'home'); // Force home if not logged in
+    }
+
     // Render database connection status
     this.renderCloudStatusBanner();
     
@@ -1048,6 +1062,9 @@ class AppEngine {
   // 3. NAVIGATION & VIEW SYSTEM
   // --------------------------------------------------
   async navigate(viewId) {
+    // Persist view state so reloads stay on the same page
+    localStorage.setItem('app_active_view', viewId);
+
     // Auth Wall check
     if (viewId !== 'home' && !this.currentUser) {
       alert("請先完成註冊或登入後，即可開啟此版塊！");
@@ -1326,13 +1343,14 @@ class AppEngine {
     const name = document.getElementById('reg-name').value.trim();
     const phone = document.getElementById('reg-phone').value.trim();
     const email = document.getElementById('reg-email').value.trim();
+    const password = document.getElementById('reg-password').value;
     const agreement = document.getElementById('reg-agreement').checked;
 
     // Read checkboxes instead of radio
     const roleBoxes = document.querySelectorAll('input[name="reg-role-box"]:checked');
     const roles = Array.from(roleBoxes).map(cb => cb.value);
 
-    if (!name || !phone || !email) {
+    if (!name || !phone || !email || !password) {
       alert("請填寫所有必要欄位。");
       return;
     }
@@ -1360,6 +1378,7 @@ class AppEngine {
       return;
     }
 
+    const passwordHash = await this.sha256(password);
     const defaultRole = roles[0]; // Set first selected role as default active role
 
     const newUser = {
@@ -1373,6 +1392,7 @@ class AppEngine {
       balance: 0.00,       // Creator Cash Earnings (TWD)
       seller_credits: 0,   // Seller points credits
       total_earnings: 0.00,
+      passwordHash,
       created_at: new Date().toISOString()
     };
 
@@ -1393,9 +1413,10 @@ class AppEngine {
   async handleLogin(event) {
     event.preventDefault();
     const phone = document.getElementById('login-phone').value.trim();
+    const password = document.getElementById('login-password').value;
 
-    if (!phone) {
-      alert("請輸入電話號碼。");
+    if (!phone || !password) {
+      alert("請輸入電話號碼與密碼。");
       return;
     }
 
@@ -1409,6 +1430,22 @@ class AppEngine {
       alert("找不到此電話號碼註冊紀錄，請先填寫上方表單進行註冊！");
       this.switchAuthTab('register');
       return;
+    }
+
+    // Password check logic
+    const inputHash = await this.sha256(password);
+    
+    // Legacy account fallback: if the user doesn't have a passwordHash, we set it now (auto-bind)
+    if (!user.passwordHash) {
+      console.log("Legacy user login: automatically binding the provided password.");
+      user.passwordHash = inputHash;
+      await this.saveUsers(); // Persist the new password hash immediately
+    } else {
+      // Verify existing password
+      if (user.passwordHash !== inputHash) {
+        alert("密碼錯誤，請重新輸入。");
+        return;
+      }
     }
 
     // Safety check: block admin logging in via public phone login

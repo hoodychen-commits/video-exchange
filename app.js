@@ -941,7 +941,12 @@ class AppEngine {
   async saveProducts() {
     localStorage.setItem('app_products', JSON.stringify(this.products));
     if (this.isCloudMode) {
-      let retryProducts = JSON.parse(JSON.stringify(this.products)).filter(p => p !== null);
+      let retryProducts = JSON.parse(JSON.stringify(this.products)).filter(p => {
+        if (!p) return false;
+        if (p.photo_url && p.photo_url.startsWith('data:image')) return false; // Prevent large base64 from blocking upsert
+        if (p.photo_url && p.photo_url.startsWith('blob:')) return false;
+        return true;
+      });
       let success = false;
       let attempts = 0;
       
@@ -2717,7 +2722,11 @@ class AppEngine {
             const url = checkboxes[i].value;
             const response = await fetch(url);
             const blob = await response.blob();
-            const file = new File([blob], `scene_${i+1}.mp4`, { type: blob.type || 'video/mp4' });
+            let mimeType = blob.type;
+            if (!mimeType || mimeType === 'application/octet-stream' || mimeType.includes('application')) {
+              mimeType = 'video/mp4';
+            }
+            const file = new File([blob], `scene_${i+1}.mp4`, { type: mimeType });
             filesToShare.push(file);
           }
           
@@ -2771,7 +2780,11 @@ class AppEngine {
         // Use Web Share API if available (Great for iOS 'Save Video' to album)
         if (!skipShare && navigator.canShare && navigator.share) {
           try {
-            const file = new File([blob], filename, { type: blob.type || 'video/mp4' });
+            let mimeType = blob.type;
+            if (!mimeType || mimeType === 'application/octet-stream' || mimeType.includes('application')) {
+              mimeType = 'video/mp4';
+            }
+            const file = new File([blob], filename, { type: mimeType });
             if (navigator.canShare({ files: [file] })) {
               await navigator.share({
                 files: [file],

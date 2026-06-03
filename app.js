@@ -535,21 +535,12 @@ class AppEngine {
             if (isSeller) {
               if (!isCreator) {
                 // Pure seller: read from Supabase balance column
-                const cloudCredits = Number(u.balance) || 0;
-                // CRITICAL: Also check localStorage — if local value is LOWER than cloud,
-                // it means a deduction happened locally but cloud hasn't updated yet (race condition).
-                // Always take the LOWER value to prevent credits restoring after refresh.
-                const localMatch = localUsersFallback.find(lu => lu.id === u.id);
-                const localCredits = localMatch ? (Number(localMatch.seller_credits) ?? cloudCredits) : cloudCredits;
-                u.seller_credits = Math.min(cloudCredits, localCredits);
+                u.seller_credits = Number(u.balance) || 0;
                 u.balance = 0;
               } else {
                 // Dual role: fetch from decoded email, or fallback to local storage backup
                 if (decodedSc !== null && !isNaN(decodedSc)) {
-                  // Same logic: compare decoded cloud value vs localStorage, take lower
-                  const localMatch = localUsersFallback.find(lu => lu.id === u.id);
-                  const localCredits = localMatch ? (Number(localMatch.seller_credits) ?? decodedSc) : decodedSc;
-                  u.seller_credits = Math.min(decodedSc, localCredits);
+                  u.seller_credits = decodedSc;
                 } else {
                   const localMatch = localUsersFallback.find(lu => lu.id === u.id);
                   u.seller_credits = localMatch ? (Number(localMatch.seller_credits) || 0) : 0;
@@ -1251,14 +1242,11 @@ class AppEngine {
             }
             if (isSeller) {
               if (!isCreator) {
-                const cloudCredits = Number(dbU.balance) || 0;
-                const localCredits = idx >= 0 ? this.users[idx].seller_credits : cloudCredits;
-                dbU.seller_credits = Math.min(cloudCredits, localCredits ?? cloudCredits);
+                dbU.seller_credits = Number(dbU.balance) || 0;
                 dbU.balance = 0;
               } else {
                 if (decodedSc !== null && !isNaN(decodedSc)) {
-                  const localCredits = idx >= 0 ? this.users[idx].seller_credits : decodedSc;
-                  dbU.seller_credits = Math.min(decodedSc, localCredits ?? decodedSc);
+                  dbU.seller_credits = decodedSc;
                 } else {
                   // Keep the local in-memory value if cloud doesn't have a decoded value
                   if (idx >= 0 && this.users[idx].seller_credits !== undefined) {

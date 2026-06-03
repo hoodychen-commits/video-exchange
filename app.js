@@ -686,7 +686,7 @@ class AppEngine {
                 }
               }
 
-              if (!p.status) p.status = 'approved'; // Auto-approve all loaded products
+              p.status = 'approved'; // Force auto-approve all loaded products since review system is removed
             }
             return p;
           }).filter(p => p !== null);
@@ -840,7 +840,7 @@ class AppEngine {
           if (!p.scenes || typeof p.scenes !== 'object') {
             p.scenes = {};
           }
-          if (!p.status) p.status = 'pending';
+          p.status = 'approved'; // Force auto-approve locally
         }
         return p;
       }).filter(p => p !== null);

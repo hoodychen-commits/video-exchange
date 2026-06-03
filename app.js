@@ -141,10 +141,15 @@ class AppEngine {
         }
       });
 
-      // If we found any videos for this category, pick one randomly and inject a <video> element
+      // If no videos are available for this category, fallback to a random DEMO video to keep UI beautiful
+      let randomVideo = null;
       if (availableVideos.length > 0) {
-        const randomVideo = availableVideos[Math.floor(Math.random() * availableVideos.length)];
-        
+        randomVideo = availableVideos[Math.floor(Math.random() * availableVideos.length)];
+      } else {
+        randomVideo = DEMO_VIDEOS[Math.floor(Math.random() * DEMO_VIDEOS.length)];
+      }
+      
+      if (randomVideo) {
         // Add video element (muted, autoplay, loop, playsinline)
         const videoEl = document.createElement('video');
         videoEl.src = randomVideo;

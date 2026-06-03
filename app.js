@@ -1112,7 +1112,8 @@ class AppEngine {
             console.log('Cloud products successfully upserted! Missing cols stripped:', [...missingColumns].join(', ') || 'none');
           } else {
             console.warn('Cloud products upsert attempt failed:', error.message);
-            const match = error.message.match(/column "([^"]+)" of relation "products" does not exist/);
+            const match = error.message.match(/column "([^"]+)" of relation "products" does not exist/i) || 
+                          error.message.match(/Could not find the '([^']+)' column/i);
             if (match && match[1]) {
               const missingCol = match[1];
               console.log(`Detected missing column '${missingCol}' in Supabase schema. Adding to strip list and retrying...`);

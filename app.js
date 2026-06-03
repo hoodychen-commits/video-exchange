@@ -2960,7 +2960,6 @@ class AppEngine {
     }
 
     // Reward Creator! 10 downloads = 3 TWD standard, scaled by level!
-    const product = this.activeDetailedProduct;
     if (product) {
       const creator = this.users.find(u => u.id === product.creator_id);
       if (creator) {

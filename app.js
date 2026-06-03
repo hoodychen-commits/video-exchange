@@ -691,13 +691,8 @@ class AppEngine {
             return p;
           }).filter(p => p !== null);
 
-          // Also include any in-memory products that don't exist in the cloud yet
-          // (e.g., just uploaded but cloud hasn't synced)
-          for (const id in inMemoryProductsMap) {
-            if (!this.products.find(p => p.id === id)) {
-              this.products.push(inMemoryProductsMap[id]);
-            }
-          }
+          // Removed local memory fallback that was causing deleted items to resurrect
+
         } else {
           // If cloud fetch failed entirely, fall back to localStorage products
           console.warn('Failed to fetch products from Supabase, using localStorage products:', pErr.message);

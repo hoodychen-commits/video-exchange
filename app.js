@@ -1120,17 +1120,21 @@ class AppEngine {
               attempts++;
             } else {
               this.handleSyncError('products', error);
-              break;
+              localStorage.setItem('app_products', JSON.stringify(this.products));
+              return false;
             }
           }
         } catch (err) {
           console.error('Cloud products upsert exception:', err);
-          break;
+          this.handleSyncError('products', err);
+          localStorage.setItem('app_products', JSON.stringify(this.products));
+          return false;
         }
       }
 
       // Always save to localStorage as a reliable backup regardless of cloud result
       localStorage.setItem('app_products', JSON.stringify(this.products));
+      return success;
     }
   }
 
@@ -1139,6 +1143,7 @@ class AppEngine {
       alert(`⚠️ 雲端資料庫儲存失敗：已被行級安全防護 (RLS) 封鎖！\n請至 Supabase -> SQL Editor 運行『ALTER TABLE ${table} DISABLE ROW LEVEL SECURITY;』來解鎖權限！`);
     } else {
       console.error(`Cloud sync error for ${table}:`, error.message);
+      alert(`⚠️ 雲端庫同步失敗 (${table})\n錯誤: ${error.message}\n如果這是上傳商品，請注意這會導致重新整理後商品消失，請截圖給工程師。`);
     }
   }
 
@@ -2311,7 +2316,14 @@ class AppEngine {
       };
 
       this.products.push(newProduct);
-      await this.saveProducts([newProduct]);
+      const success = await this.saveProducts([newProduct]);
+      
+      if (!success) {
+        // Revert local memory push if cloud save failed
+        this.products = this.products.filter(p => p.id !== newProduct.id);
+        throw new Error("雲端資料庫更新失敗，商品未能儲存");
+      }
+      
       this.resetUploadForm();
 
       // Recalculate creator level since they now have a new approved product

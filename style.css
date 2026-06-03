@@ -1595,6 +1595,60 @@ input:focus, select:focus {
   background-color: rgba(16, 185, 129, 0.04);
 }
 
+/* Offline Payment Box inside Recharge Modal */
+.offline-payment-box {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.02);
+  text-align: left;
+}
+
+.offline-payment-header {
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--text-main);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border-light);
+  padding-bottom: 8px;
+}
+
+.bank-details-card {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-light);
+  border-left: 4px solid var(--color-seller);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  margin: 12px 0;
+  font-size: 0.9rem;
+  line-height: 1.7;
+}
+
+.bank-details-card strong {
+  color: var(--text-main);
+}
+
+.btn-seller {
+  background: var(--color-seller);
+  color: white;
+  border: none;
+  font-weight: 700;
+  border-radius: var(--radius-md);
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+}
+
+.btn-seller:hover {
+  background: #0ea271;
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(16, 185, 129, 0.3);
+}
+
 .bundle-badge {
   position: absolute;
   top: -10px;

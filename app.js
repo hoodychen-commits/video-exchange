@@ -1886,29 +1886,28 @@ class AppEngine {
   }
 
   selectRechargeBundle(amount, bonus) {
-    if (!this.currentUser || this.currentUser.role !== 'seller') {
+    if (!this.currentUser || (this.currentUser.role !== 'seller' && (!this.currentUser.roles || !this.currentUser.roles.includes('seller')))) {
       alert("請先登入您的帶貨主播會員帳號！");
       this.closeRechargeModal();
       this.openAuthModal('login');
       return;
     }
 
-    const confirmPay = confirm(`【模擬金流付費】確認是否儲值 TWD $${amount} 元以兌換 ${amount + bonus} 點積分？`);
-    if (confirmPay) {
-      this.currentUser.seller_credits += (amount + bonus);
-      
-      const userIdx = this.users.findIndex(u => u.id === this.currentUser.id);
-      if (userIdx !== -1) {
-        this.users[userIdx] = this.currentUser;
-        this.saveUsers();
-      }
+    const infoText = `【💰 線下匯款加值引導】\n\n您已選擇儲值方案：TWD $${amount.toLocaleString()} 元\n可兌換積分點數：${(amount + bonus).toLocaleString()} 點 (含額外贈點)\n\n請將款項匯至以下平台專用帳戶：\n- 銀行：822 中國信託商業銀行 (敦北分行)\n- 戶名：陳阿明\n- 帳號：123-45678-901\n\n匯款完成後，請至 LINE 客服提供您的「註冊手機號碼」與「匯款帳號後五碼」，管理員核對無誤後會立即為您後台人工開通加點！\n\n點擊「確認」將為您複製匯款明細並自動跳轉至 LINE@ 客服聯絡視窗！`;
 
-      this.triggerCloudSyncToast("儲值成功！積分點數已實時到帳！");
-      alert(`🎉 儲值完成！成功到帳 ${amount + bonus} 點積分 (含額外贈送 $${bonus} 元點數)！現有積分：${this.currentUser.seller_credits} 點。`);
+    if (confirm(infoText)) {
+      // Auto-copy details for the user
+      const copyText = `【匯款開通點數通知】\n匯款金額：TWD $${amount} 元\n兌換點數：${amount + bonus} 點\n註冊電話：${this.currentUser.phone || '未提供'}\n匯款後五碼：(請在此填寫您的帳號後五碼)\n\n平台帳戶：\n銀行：中國信託 (822)\n戶名：陳阿明\n帳號：123-45678-901`;
       
+      navigator.clipboard.writeText(copyText).then(() => {
+        this.triggerCloudSyncToast("匯款資訊已複製！請至 LINE 直接貼上發送！");
+      }).catch(err => {
+        console.warn("Clipboard copy failed, fallback logic used:", err);
+      });
+
+      // Open Line link in new tab
+      window.open("https://lin.ee/VN4zDFs", "_blank");
       this.closeRechargeModal();
-      this.renderSellerStats();
-      this.renderAdminPanels();
     }
   }
 

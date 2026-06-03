@@ -578,17 +578,47 @@ class AppEngine {
         }
 
         // Load products from Supabase
+        // CRITICAL: Always merge with localStorage data to preserve scenes/videos that
+        // Supabase may not have stored (e.g., if scenes JSONB column is missing from schema).
+        const localProductsStr = localStorage.getItem('app_products');
+        const localProductsMap = {};
+        if (localProductsStr) {
+          try {
+            JSON.parse(localProductsStr).forEach(lp => {
+              if (lp && lp.id) localProductsMap[lp.id] = lp;
+            });
+          } catch(e) {}
+        }
+
         let { data: dbProducts, error: pErr } = await this.supabase.from('products').select('*');
         if (!pErr) {
           this.products = (dbProducts || []).map(p => {
             if (p) {
-              if (!p.scenes || typeof p.scenes !== 'object') {
-                p.scenes = {};
+              // Try to recover scenes from localStorage if cloud has none
+              const localVersion = localProductsMap[p.id];
+              let cloudHasScenes = false;
+              if (p.scenes && typeof p.scenes === 'object') {
+                for (const k in p.scenes) {
+                  if (p.scenes[k] && p.scenes[k].length > 0) { cloudHasScenes = true; break; }
+                }
               }
+              if (!cloudHasScenes && localVersion) {
+                // Cloud lost scenes data — restore from localStorage backup
+                p.scenes = localVersion.scenes || {};
+                if (!p.video_url && localVersion.video_url) p.video_url = localVersion.video_url;
+                console.log(`Restored scenes for product "${p.name}" from localStorage backup.`);
+              }
+              if (!p.scenes || typeof p.scenes !== 'object') p.scenes = {};
               if (!p.status) p.status = 'pending';
             }
             return p;
           }).filter(p => p !== null);
+        } else {
+          // If cloud fetch failed entirely, fall back to localStorage products
+          console.warn('Failed to fetch products from Supabase, using localStorage products:', pErr.message);
+          if (localProductsStr) {
+            try { this.products = JSON.parse(localProductsStr); } catch(e) {}
+          }
         }
 
         // Load withdrawals from Supabase
@@ -952,30 +982,40 @@ class AppEngine {
   async saveProducts() {
     localStorage.setItem('app_products', JSON.stringify(this.products));
     if (this.isCloudMode) {
+      // Build the payload — exclude products with base64/blob photo URLs (too large)
       let retryProducts = JSON.parse(JSON.stringify(this.products)).filter(p => {
         if (!p) return false;
-        if (p.photo_url && p.photo_url.startsWith('data:image')) return false; // Prevent large base64 from blocking upsert
+        if (p.photo_url && p.photo_url.startsWith('data:image')) return false;
         if (p.photo_url && p.photo_url.startsWith('blob:')) return false;
         return true;
       });
+
+      // Track which columns are confirmed missing in Supabase schema
+      const missingColumns = new Set();
       let success = false;
       let attempts = 0;
-      
-      while (!success && attempts < 10) {
+
+      while (!success && attempts < 15) {
         try {
-          const { error } = await this.supabase.from('products').upsert(retryProducts);
+          // Apply any already-known missing columns before attempting
+          const payload = retryProducts.map(p => {
+            if (!p) return p;
+            const copy = Object.assign({}, p);
+            missingColumns.forEach(col => delete copy[col]);
+            return copy;
+          });
+
+          const { error } = await this.supabase.from('products').upsert(payload);
           if (!error) {
             success = true;
-            console.log("Cloud products successfully upserted!");
+            console.log('Cloud products successfully upserted! Missing cols stripped:', [...missingColumns].join(', ') || 'none');
           } else {
-            console.warn("Cloud products upsert attempt failed:", error.message);
+            console.warn('Cloud products upsert attempt failed:', error.message);
             const match = error.message.match(/column "([^"]+)" of relation "products" does not exist/);
             if (match && match[1]) {
               const missingCol = match[1];
-              console.log(`Dynamically stripping missing column '${missingCol}' and retrying...`);
-              retryProducts.forEach(p => {
-                if (p) delete p[missingCol];
-              });
+              console.log(`Detected missing column '${missingCol}' in Supabase schema. Adding to strip list and retrying...`);
+              missingColumns.add(missingCol);
               attempts++;
             } else {
               this.handleSyncError('products', error);
@@ -983,10 +1023,13 @@ class AppEngine {
             }
           }
         } catch (err) {
-          console.error("Cloud products upsert exception:", err);
+          console.error('Cloud products upsert exception:', err);
           break;
         }
       }
+
+      // Always save to localStorage as a reliable backup regardless of cloud result
+      localStorage.setItem('app_products', JSON.stringify(this.products));
     }
   }
 
@@ -1100,9 +1143,28 @@ class AppEngine {
       }
     }
 
-    // Pull latest data from Supabase before rendering to ensure real-time sync across devices
+    // Only sync users (credits/balance) on navigation — NOT products.
+    // Re-loading all products on every tab switch was the cause of videos disappearing:
+    // if Supabase returned products without scenes data, it would overwrite valid in-memory data.
     if (this.isCloudMode) {
-      await this.loadState();
+      try {
+        let { data: dbUsers } = await this.supabase.from('users').select('*');
+        if (dbUsers && dbUsers.length > 0) {
+          // Merge users: update credits/balance from cloud, keep local data for anything missing
+          dbUsers.forEach(dbU => {
+            const idx = this.users.findIndex(u => u.id === dbU.id);
+            if (idx >= 0) {
+              // Normalize passwordhash casing
+              if (dbU.passwordhash && !dbU.passwordHash) dbU.passwordHash = dbU.passwordhash;
+              this.users[idx] = Object.assign({}, this.users[idx], dbU);
+            } else {
+              this.users.push(dbU);
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('User sync on navigate failed (non-critical):', e.message);
+      }
     }
     // Always refresh current user session from the latest users array
     // This ensures admin-modified credits/balance are picked up immediately

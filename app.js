@@ -732,7 +732,7 @@ class AppEngine {
           name: "防滑高透氣編織運動慢跑鞋",
           category: "shoes-bags",
           photo_url: DEMO_PHOTOS[2],
-          status: "pending",
+          status: "approved",
           downloads_count: 0,
           created_at: new Date().toISOString(),
           is_quality: false,
@@ -1049,12 +1049,13 @@ class AppEngine {
     // Pull latest data from Supabase before rendering to ensure real-time sync across devices
     if (this.isCloudMode) {
       await this.loadState();
-      // Refresh current user session in case balance or details changed on other devices/backend
-      if (this.currentUser) {
-        const freshUser = this.users.find(u => u.id === this.currentUser.id);
-        if (freshUser) {
-          this.currentUser = freshUser;
-        }
+    }
+    // Always refresh current user session from the latest users array
+    // This ensures admin-modified credits/balance are picked up immediately
+    if (this.currentUser) {
+      const freshUser = this.users.find(u => u.id === this.currentUser.id);
+      if (freshUser) {
+        this.currentUser = freshUser;
       }
     }
 
@@ -1973,7 +1974,7 @@ class AppEngine {
         name,
         category,
         photo_url: finalPhotoUrl,
-        status: "pending",
+        status: "approved",
         downloads_count: 0,
         created_at: new Date().toISOString(),
         is_quality: false, // Updated by Admin backend
@@ -1984,8 +1985,12 @@ class AppEngine {
       this.saveProducts();
       this.resetUploadForm();
 
-      this.triggerCloudSyncToast("商品素材上傳成功！已提交後台審核！");
-      alert("您的商品分鏡素材已成功上傳，管理員將於 24 小時內完成質量審核！");
+      // Recalculate creator level since they now have a new approved product
+      this.recalculateUserCreatorLevel(this.currentUser);
+      this.saveUsers();
+
+      this.triggerCloudSyncToast("商品素材上傳成功！已即時上架！");
+      alert("🎉 您的商品分鏡素材已成功上傳並即時上架！所有裝置（手機與電腦）均可同步看到！");
       
       this.renderCreatorStats();
       this.renderAdminPanels();
@@ -2189,6 +2194,12 @@ class AppEngine {
   // --------------------------------------------------
   renderSellerStats() {
     if (!this.currentUser || this.currentUser.role !== 'seller') return;
+
+    // Re-sync seller_credits from the users array to pick up admin changes
+    const freshUser = this.users.find(u => u.id === this.currentUser.id);
+    if (freshUser) {
+      this.currentUser.seller_credits = freshUser.seller_credits;
+    }
 
     const credEl = document.getElementById('seller-credits');
     if (credEl) credEl.innerText = this.currentUser.seller_credits;
@@ -3108,12 +3119,20 @@ class AppEngine {
     } else {
       u.balance = Math.max(0, (Number(u.balance) || 0) + change);
     }
+
+    // Sync currentUser reference if the modified user is the currently logged-in user
+    if (this.currentUser && this.currentUser.id === userId) {
+      this.currentUser.seller_credits = u.seller_credits;
+      this.currentUser.balance = u.balance;
+    }
+
     this.saveUsers();
     
-    this.triggerCloudSyncToast("使用者帳戶餘額已手動變更完成！");
+    this.triggerCloudSyncToast("使用者帳戶餘額已手動變更完成！已同步至所有裝置！");
     this.renderAdminPanels();
     this.renderCreatorStats();
     this.renderSellerStats();
+    this.renderNavigation();
   }
 
   adminModifyUserLevel(userId, change) {

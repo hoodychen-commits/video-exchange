@@ -494,11 +494,12 @@ class AppEngine {
             }
             // Sync seller_credits from database balance column for seller role
             const isSeller = u.role === 'seller' || u.roles.includes('seller');
+            const isCreator = u.role === 'creator' || u.roles.includes('creator');
             if (u.seller_credits === undefined) {
-              u.seller_credits = isSeller ? (Number(u.balance) || 0) : 0;
+              u.seller_credits = (isSeller && !isCreator) ? (Number(u.balance) || 0) : 0;
             }
             // For safety, clear balance for absolute sellers to avoid UI overlaps
-            if (isSeller && !u.roles.includes('creator')) {
+            if (isSeller && !isCreator) {
               u.balance = 0;
             }
           }
@@ -952,7 +953,24 @@ class AppEngine {
   checkSession() {
     const session = localStorage.getItem('app_session');
     if (session) {
-      const user = this.users.find(u => u.id === session);
+      let user = this.users.find(u => u.id === session);
+      if (!user) {
+        // Fallback to local storage backup to prevent auto-logout when cloud database fails or lag sync
+        const localUsers = localStorage.getItem('app_users');
+        if (localUsers) {
+          try {
+            const parsedLocal = JSON.parse(localUsers);
+            const foundLocal = parsedLocal.find(u => u.id === session);
+            if (foundLocal) {
+              console.log("Session user not in cloud memory, restoring from localStorage fallback.");
+              user = foundLocal;
+              this.users.push(user); // Make it available globally in-memory
+            }
+          } catch(e) {
+            console.error("Failed to parse local fallback users in checkSession:", e);
+          }
+        }
+      }
       if (user) {
         if (user.role === 'admin' || (user.roles && user.roles.includes('admin')) || user.id === 'c01f6ec0-e251-4b13-9876-000000000003') {
           if (sessionStorage.getItem('admin_authenticated') !== 'true') {
@@ -2931,6 +2949,38 @@ class AppEngine {
 
         let lvlLabel = u.roles && u.roles.includes('creator') ? `LV.${u.level} 分成` : `LV.${u.level} 一般`;
 
+        let modifyButtonsHtml = '';
+        const hasCreator = u.role === 'creator' || (u.roles && u.roles.includes('creator'));
+        const hasSeller = u.role === 'seller' || (u.roles && u.roles.includes('seller'));
+
+        if (hasSeller) {
+          modifyButtonsHtml += `
+            <div style="display:flex; flex-direction:column; gap:4px; border:1px solid rgba(16,185,129,0.2); padding:6px; border-radius:4px; background:rgba(16,185,129,0.02); min-width:180px;">
+              <span style="font-size:10px; font-weight:700; color:var(--color-seller);">[管理主播積分]</span>
+              <div style="display:flex; gap:4px; flex-wrap:wrap;">
+                <button class="btn btn-sm btn-outline" style="padding:2px 6px; font-size:11px; height:auto;" onclick="app.adminModifyUserCredits('${u.id}', 100, 'credits')">+100 點</button>
+                <button class="btn btn-sm btn-outline" style="padding:2px 6px; font-size:11px; height:auto;" onclick="app.adminModifyUserCredits('${u.id}', 1000, 'credits')">+1000 點</button>
+                <button class="btn btn-sm btn-outline text-danger" style="padding:2px 6px; font-size:11px; height:auto; border-color:rgba(239,68,68,0.2);" onclick="app.adminModifyUserCredits('${u.id}', -100, 'credits')">-100 點</button>
+                <button class="btn btn-sm btn-outline text-danger" style="padding:2px 6px; font-size:11px; height:auto; border-color:rgba(239,68,68,0.2);" onclick="app.adminModifyUserCredits('${u.id}', -1000, 'credits')">-1000 點</button>
+              </div>
+            </div>
+          `;
+        }
+
+        if (hasCreator) {
+          modifyButtonsHtml += `
+            <div style="display:flex; flex-direction:column; gap:4px; border:1px solid rgba(99,102,241,0.2); padding:6px; border-radius:4px; background:rgba(99,102,241,0.02); min-width:180px; margin-top:${hasSeller ? '4px' : '0'};">
+              <span style="font-size:10px; font-weight:700; color:var(--color-creator);">[管理創作者收益]</span>
+              <div style="display:flex; gap:4px; flex-wrap:wrap;">
+                <button class="btn btn-sm btn-outline" style="padding:2px 6px; font-size:11px; height:auto;" onclick="app.adminModifyUserCredits('${u.id}', 100, 'balance')">+$100 收益</button>
+                <button class="btn btn-sm btn-outline" style="padding:2px 6px; font-size:11px; height:auto;" onclick="app.adminModifyUserCredits('${u.id}', 1000, 'balance')">+$1000 收益</button>
+                <button class="btn btn-sm btn-outline text-danger" style="padding:2px 6px; font-size:11px; height:auto; border-color:rgba(239,68,68,0.2);" onclick="app.adminModifyUserCredits('${u.id}', -100, 'balance')">-$100 收益</button>
+                <button class="btn btn-sm btn-outline text-danger" style="padding:2px 6px; font-size:11px; height:auto; border-color:rgba(239,68,68,0.2);" onclick="app.adminModifyUserCredits('${u.id}', -1000, 'balance')">-$1000 收益</button>
+              </div>
+            </div>
+          `;
+        }
+
         row.innerHTML = `
           <td><b>${u.name}</b></td>
           <td><code>${u.phone}</code></td>
@@ -2939,13 +2989,12 @@ class AppEngine {
           <td class="fw-bold text-center">${balLabel}</td>
           <td>${lvlLabel}</td>
           <td>
-            <div style="display:flex; gap:6px;">
-              <button class="btn btn-sm btn-outline" onclick="app.adminModifyUserCredits('${u.id}', 100)">+100 點</button>
-              <button class="btn btn-sm btn-outline" onclick="app.adminModifyUserCredits('${u.id}', 1000)">+1000 點</button>
-              <button class="btn btn-sm btn-outline text-danger" onclick="app.adminModifyUserCredits('${u.id}', -100)">-100 點</button>
-              <button class="btn btn-sm btn-outline text-danger" onclick="app.adminModifyUserCredits('${u.id}', -1000)">-1000 點</button>
-              ${(u.role === 'creator' || (u.roles && u.roles.includes('creator'))) ? `<button class="btn btn-sm btn-outline" onclick="app.adminModifyUserLevel('${u.id}', 1)">升 1 級</button>` : ''}
-              ${(u.role !== 'admin' && (!u.roles || !u.roles.includes('admin'))) ? `<button class="btn btn-sm btn-outline text-danger" onclick="app.adminDeleteUser('${u.id}')"><i class="fa-solid fa-trash-can"></i></button>` : ''}
+            <div style="display:flex; flex-direction:column; gap:4px; align-items:stretch;">
+              ${modifyButtonsHtml}
+              <div style="display:flex; gap:6px; align-items:center; margin-top:4px; justify-content:flex-start;">
+                ${hasCreator ? `<button class="btn btn-sm btn-outline" style="padding:2px 8px; height:auto; font-size:11px;" onclick="app.adminModifyUserLevel('${u.id}', 1)"><i class="fa-solid fa-angles-up"></i> 升 1 級</button>` : ''}
+                ${u.role !== 'admin' && (!u.roles || !u.roles.includes('admin')) ? `<button class="btn btn-sm btn-outline text-danger" style="padding:2px 8px; height:auto; font-size:11px;" onclick="app.adminDeleteUser('${u.id}')"><i class="fa-solid fa-trash-can"></i> 刪除帳戶</button>` : ''}
+              </div>
             </div>
           </td>
         `;
@@ -3039,13 +3088,11 @@ class AppEngine {
     this.renderCreatorStats();
   }
 
-  adminModifyUserCredits(userId, change) {
+  adminModifyUserCredits(userId, change, type = 'credits') {
     const u = this.users.find(x => x.id === userId);
     if (!u) return;
 
-    // If they have seller role, recharge points. Otherwise recharge cash.
-    const isSeller = u.role === 'seller' || (u.roles && u.roles.includes('seller'));
-    if (isSeller) {
+    if (type === 'credits') {
       u.seller_credits = Math.max(0, (Number(u.seller_credits) || 0) + change);
     } else {
       u.balance = Math.max(0, (Number(u.balance) || 0) + change);

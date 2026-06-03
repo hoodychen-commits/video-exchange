@@ -499,15 +499,27 @@ class AppEngine {
             const isSeller = u.role === 'seller' || u.roles.includes('seller');
             const isCreator = u.role === 'creator' || u.roles.includes('creator');
             
+            // Decode seller_credits from email if it was encoded
+            let decodedSc = null;
+            if (u.email && typeof u.email === 'string' && u.email.includes('|SC:')) {
+              const parts = u.email.split('|SC:');
+              u.email = parts[0];
+              decodedSc = parseInt(parts[1], 10);
+            }
+
             if (isSeller) {
               if (!isCreator) {
                 // Pure seller: read from balance
                 u.seller_credits = Number(u.balance) || 0;
                 u.balance = 0;
               } else {
-                // Dual role: fetch from local storage backup
-                const localMatch = localUsersFallback.find(lu => lu.id === u.id);
-                u.seller_credits = localMatch ? (Number(localMatch.seller_credits) || 0) : 0;
+                // Dual role: fetch from decoded email, or fallback to local storage backup
+                if (decodedSc !== null && !isNaN(decodedSc)) {
+                  u.seller_credits = decodedSc;
+                } else {
+                  const localMatch = localUsersFallback.find(lu => lu.id === u.id);
+                  u.seller_credits = localMatch ? (Number(localMatch.seller_credits) || 0) : 0;
+                }
               }
             } else {
               // Non-sellers: seller_credits should be 0
@@ -868,12 +880,12 @@ class AppEngine {
         const isSeller = u.role === 'seller' || (u.roles && u.roles.includes('seller'));
         const isCreator = u.role === 'creator' || (u.roles && u.roles.includes('creator'));
         if (isSeller) {
-          // DB has no seller_credits column — always write seller_credits into balance for sellers
-          // For dual-role (creator+seller), we can't use balance (that's earnings)
-          // So pure sellers: balance = seller_credits
-          // Dual-role: just skip — they rely on in-memory + localStorage for seller_credits
           if (!isCreator) {
             u.balance = Number(u.seller_credits) || 0;
+          } else {
+            // Dual-role: DB lacks seller_credits column, so we encode it in the email string for cloud sync
+            if (!u.email) u.email = "user@material.exchange";
+            u.email = u.email.split('|SC:')[0] + '|SC:' + (Number(u.seller_credits) || 0);
           }
         }
         return u;

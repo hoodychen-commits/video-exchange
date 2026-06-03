@@ -503,7 +503,17 @@ class AppEngine {
 
         // Load products from Supabase
         let { data: dbProducts, error: pErr } = await this.supabase.from('products').select('*');
-        if (!pErr) this.products = dbProducts || [];
+        if (!pErr) {
+          this.products = (dbProducts || []).map(p => {
+            if (p) {
+              if (!p.scenes || typeof p.scenes !== 'object') {
+                p.scenes = {};
+              }
+              if (!p.status) p.status = 'pending';
+            }
+            return p;
+          }).filter(p => p !== null);
+        }
 
         // Load withdrawals from Supabase
         let { data: dbWithdrawals, error: wErr } = await this.supabase.from('withdrawals').select('*');
@@ -626,7 +636,15 @@ class AppEngine {
     }
 
     if (localProducts) {
-      this.products = JSON.parse(localProducts);
+      this.products = JSON.parse(localProducts).map(p => {
+        if (p) {
+          if (!p.scenes || typeof p.scenes !== 'object') {
+            p.scenes = {};
+          }
+          if (!p.status) p.status = 'pending';
+        }
+        return p;
+      }).filter(p => p !== null);
     } else {
       this.products = [
         {
@@ -801,18 +819,35 @@ class AppEngine {
   async saveUsers() {
     localStorage.setItem('app_users', JSON.stringify(this.users));
     if (this.isCloudMode) {
-      try {
-        const { error } = await this.supabase.from('users').upsert(this.users);
-        if (error) {
-          console.error("Cloud users sync failed:", error.message);
-          if (error.message.includes("row-level security")) {
-            alert("⚠️ 雲端資料庫儲存失敗：已被行級安全防護 (RLS) 封鎖！\n請至 Supabase -> SQL Editor 運行『ALTER TABLE users DISABLE ROW LEVEL SECURITY;』來解鎖權限，否則資料無法同步！");
+      let retryUsers = JSON.parse(JSON.stringify(this.users)).filter(u => u !== null);
+      let success = false;
+      let attempts = 0;
+      
+      while (!success && attempts < 10) {
+        try {
+          const { error } = await this.supabase.from('users').upsert(retryUsers);
+          if (!error) {
+            success = true;
+            console.log("Cloud users successfully upserted!");
           } else {
-            alert(`⚠️ 雲端資料庫同步失敗：${error.message}`);
+            console.warn("Cloud users upsert attempt failed:", error.message);
+            const match = error.message.match(/column "([^"]+)" of relation "users" does not exist/);
+            if (match && match[1]) {
+              const missingCol = match[1];
+              console.log(`Dynamically stripping missing column '${missingCol}' and retrying...`);
+              retryUsers.forEach(u => {
+                if (u) delete u[missingCol];
+              });
+              attempts++;
+            } else {
+              this.handleSyncError('users', error);
+              break;
+            }
           }
+        } catch (err) {
+          console.error("Cloud users upsert exception:", err);
+          break;
         }
-      } catch (err) {
-        console.error("Cloud users sync error:", err);
       }
     }
   }
@@ -820,19 +855,44 @@ class AppEngine {
   async saveProducts() {
     localStorage.setItem('app_products', JSON.stringify(this.products));
     if (this.isCloudMode) {
-      try {
-        const { error } = await this.supabase.from('products').upsert(this.products);
-        if (error) {
-          console.error("Cloud products sync failed:", error.message);
-          if (error.message.includes("row-level security")) {
-            alert("⚠️ 雲端商品儲存失敗：已被行級安全防護 (RLS) 封鎖！\n請至 Supabase -> SQL Editor 運行『ALTER TABLE products DISABLE ROW LEVEL SECURITY;』來解鎖權限！");
+      let retryProducts = JSON.parse(JSON.stringify(this.products)).filter(p => p !== null);
+      let success = false;
+      let attempts = 0;
+      
+      while (!success && attempts < 10) {
+        try {
+          const { error } = await this.supabase.from('products').upsert(retryProducts);
+          if (!error) {
+            success = true;
+            console.log("Cloud products successfully upserted!");
           } else {
-            alert(`⚠️ 商品資料同步失敗：${error.message}`);
+            console.warn("Cloud products upsert attempt failed:", error.message);
+            const match = error.message.match(/column "([^"]+)" of relation "products" does not exist/);
+            if (match && match[1]) {
+              const missingCol = match[1];
+              console.log(`Dynamically stripping missing column '${missingCol}' and retrying...`);
+              retryProducts.forEach(p => {
+                if (p) delete p[missingCol];
+              });
+              attempts++;
+            } else {
+              this.handleSyncError('products', error);
+              break;
+            }
           }
+        } catch (err) {
+          console.error("Cloud products upsert exception:", err);
+          break;
         }
-      } catch (err) {
-        console.error("Cloud products sync error:", err);
       }
+    }
+  }
+
+  handleSyncError(table, error) {
+    if (error.message.includes('row-level security') || error.message.includes('RLS')) {
+      alert(`⚠️ 雲端資料庫儲存失敗：已被行級安全防護 (RLS) 封鎖！\n請至 Supabase -> SQL Editor 運行『ALTER TABLE ${table} DISABLE ROW LEVEL SECURITY;』來解鎖權限！`);
+    } else {
+      console.error(`Cloud sync error for ${table}:`, error.message);
     }
   }
 
@@ -1627,13 +1687,28 @@ class AppEngine {
     }
   }
 
-  recalculateCreatorLevel() {
-    if (!this.currentUser || this.currentUser.role !== 'creator') return;
+  recalculateUserCreatorLevel(user) {
+    if (!user) return;
     
-    const myApproved = this.products.filter(p => p.creator_id === this.currentUser.id && p.status === 'approved');
-    const highQualityCount = myApproved.filter(p => p.is_quality).length;
+    // Ensure roles is initialized properly as an array
+    if (!user.roles) {
+      user.roles = [user.role || 'creator'];
+    } else if (typeof user.roles === 'string') {
+      try {
+        user.roles = user.roles.replace(/[{}]/g, '').split(',').map(s => s.trim());
+      } catch(e) {
+        user.roles = [user.role || 'creator'];
+      }
+    } else if (!Array.isArray(user.roles)) {
+      user.roles = [user.role || 'creator'];
+    }
 
-    // Non-linear thresholds (80% users inside LV 7, only 20% can reach LV 10)
+    const hasCreatorRole = user.role === 'creator' || user.roles.includes('creator');
+    if (!hasCreatorRole) return;
+
+    const myApproved = this.products.filter(p => p && p.creator_id === user.id && p.status === 'approved');
+    const highQualityCount = myApproved.filter(p => p && p.is_quality).length;
+
     const thresholds = {
       1: { uploads: 0, hq: 0 },
       2: { uploads: 1, hq: 0 },
@@ -1656,10 +1731,15 @@ class AppEngine {
       }
     }
 
-    if (this.currentUser.level !== calculatedLevel) {
-      this.currentUser.level = calculatedLevel;
-      this.saveUsers();
+    if (user.level !== calculatedLevel) {
+      user.level = calculatedLevel;
     }
+  }
+
+  recalculateCreatorLevel() {
+    if (!this.currentUser || this.currentUser.role !== 'creator') return;
+    this.recalculateUserCreatorLevel(this.currentUser);
+    this.saveUsers();
   }
 
   previewProductPhoto(event) {
@@ -1976,7 +2056,7 @@ class AppEngine {
       row.innerHTML = `
         <td>${new Date(w.created_at).toLocaleDateString()}</td>
         <td>${w.bank_info}</td>
-        <td class="fw-bold text-creator">$${w.amount.toFixed(2)}</td>
+        <td class="fw-bold text-creator">$${(Number(w.amount) || 0).toFixed(2)}</td>
         <td><span class="status-badge ${badgeClass}">${badgeLabel}</span></td>
       `;
       list.appendChild(row);
@@ -2768,7 +2848,7 @@ class AppEngine {
           row.innerHTML = `
             <td><b>${w.creator_name}</b></td>
             <td>${creatorUser.phone || '無'} / ${creatorUser.email || '無'}</td>
-            <td class="fw-bold text-creator">$${w.amount.toFixed(2)}</td>
+            <td class="fw-bold text-creator">$${(Number(w.amount) || 0).toFixed(2)}</td>
             <td><code>${w.bank_info}</code></td>
             <td>${new Date(w.created_at).toLocaleString()}</td>
             <td>
@@ -2806,13 +2886,13 @@ class AppEngine {
 
         let balLabel = '';
         if (u.roles && u.roles.includes('creator')) {
-          balLabel += `收益: $${u.balance.toFixed(2)} TWD<br>`;
+          balLabel += `收益: $${(Number(u.balance) || 0).toFixed(2)} TWD<br>`;
         }
         if (u.roles && u.roles.includes('seller')) {
-          balLabel += `積分: ${u.seller_credits} 點`;
+          balLabel += `積分: ${u.seller_credits || 0} 點`;
         }
         if (!balLabel) {
-          balLabel = u.role === 'seller' ? `${u.seller_credits} 積分` : `TWD $${u.balance.toFixed(2)}`;
+          balLabel = u.role === 'seller' ? `${u.seller_credits || 0} 積分` : `TWD $${(Number(u.balance) || 0).toFixed(2)}`;
         }
 
         let lvlLabel = u.roles && u.roles.includes('creator') ? `LV.${u.level} 分成` : `LV.${u.level} 一般`;
@@ -2839,25 +2919,39 @@ class AppEngine {
   }
 
   adminApproveProduct(productId, isHighQuality = false) {
-    const p = this.products.find(x => x.id === productId);
-    if (!p) return;
+    try {
+      const p = this.products.find(x => x.id === productId);
+      if (!p) {
+        alert("找不到該商品素材！");
+        return;
+      }
 
-    p.status = 'approved';
-    p.is_quality = isHighQuality;
+      p.status = 'approved';
+      p.is_quality = isHighQuality;
 
-    // Recalculate levels of the creator immediately since they have a new approved product
-    const creator = this.users.find(u => u.id === p.creator_id);
-    
-    this.saveProducts();
-    this.recalculateCreatorLevel();
-    this.saveUsers();
+      // Recalculate levels of the creator immediately since they have a new approved product
+      try {
+        const creator = this.users.find(u => u.id === p.creator_id);
+        if (creator) {
+          this.recalculateUserCreatorLevel(creator);
+        }
+      } catch (err) {
+        console.error("Error recalculating creator level during approval:", err);
+      }
+      
+      this.saveProducts();
+      this.saveUsers();
 
-    this.triggerCloudSyncToast("素材已審核通過上架！");
-    alert(`👍 商品素材審核通過！已同步上架至帶貨神器首頁。${isHighQuality ? '已標記為【高品質】！' : ''}`);
-    
-    this.renderAdminPanels();
-    this.renderProducts();
-    this.renderCreatorStats();
+      this.triggerCloudSyncToast("素材已審核通過上架！");
+      alert(`👍 商品素材審核通過！已同步上架至帶貨神器首頁。${isHighQuality ? '已標記為【高品質】！' : ''}`);
+      
+      this.renderAdminPanels();
+      this.renderProducts();
+      this.renderCreatorStats();
+    } catch (err) {
+      console.error("Error in adminApproveProduct:", err);
+      alert("審核失敗，錯誤原因：" + err.message);
+    }
   }
 
   adminRejectProduct(productId) {

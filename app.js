@@ -741,6 +741,14 @@ class AppEngine {
           u.seller_credits = Number(u.seller_credits) || 0;
         }
       });
+      const seenAdminIds = new Set();
+      this.users = this.users.filter(u => {
+        if (u.role === 'admin' || (u.roles && u.roles.includes('admin')) || u.name === '超級管理員') {
+           if (seenAdminIds.size > 0) return false;
+           seenAdminIds.add(u.id);
+        }
+        return true;
+      });
       
       let storedAdmin = this.users.find(u => u.role === 'admin' || (u.roles && u.roles.includes('admin')) || u.name === '超級管理員');
       if (!storedAdmin) {
@@ -1060,11 +1068,12 @@ class AppEngine {
     }
   }
 
-  async saveProducts() {
+  async saveProducts(productsToSync = null) {
     localStorage.setItem('app_products', JSON.stringify(this.products));
     if (this.isCloudMode) {
+      const syncList = productsToSync ? productsToSync : this.products;
       // Build the payload — exclude products with base64/blob photo URLs (too large)
-      let retryProducts = JSON.parse(JSON.stringify(this.products)).filter(p => {
+      let retryProducts = JSON.parse(JSON.stringify(syncList)).filter(p => {
         if (!p) return false;
         if (p.photo_url && p.photo_url.startsWith('data:image')) return false;
         if (p.photo_url && p.photo_url.startsWith('blob:')) return false;
@@ -1494,7 +1503,7 @@ class AppEngine {
     const userIdx = this.users.findIndex(u => u.id === this.currentUser.id);
     if (userIdx !== -1) {
       this.users[userIdx] = this.currentUser;
-      this.saveUsers();
+      this.saveUsers([this.currentUser]);
     }
 
     this.triggerCloudSyncToast(`已切換為【${nextRole === 'creator' ? '創作者' : '帶貨主播'}】身分`);
@@ -1621,7 +1630,7 @@ class AppEngine {
     };
 
     this.users.push(newUser);
-    await this.saveUsers(); // Await the cloud insertion to complete before navigating
+    await this.saveUsers([newUser]); // Await the cloud insertion to complete before navigating
     this.currentUser = newUser;
     localStorage.setItem('app_session', newUser.id);
 
@@ -1685,7 +1694,7 @@ class AppEngine {
     if (!user.passwordHash) {
       console.log("Legacy user login: automatically binding the provided password.");
       user.passwordHash = inputHash;
-      await this.saveUsers(); // Persist the new password hash immediately
+      await this.saveUsers([user]); // Persist the new password hash immediately
     } else {
       // Verify existing password
       if (user.passwordHash !== inputHash) {
@@ -2120,7 +2129,7 @@ class AppEngine {
   recalculateCreatorLevel() {
     if (!this.currentUser || this.currentUser.role !== 'creator') return;
     this.recalculateUserCreatorLevel(this.currentUser);
-    this.saveUsers();
+    this.saveUsers([this.currentUser]);
   }
 
   previewProductPhoto(event) {
@@ -2302,12 +2311,12 @@ class AppEngine {
       };
 
       this.products.push(newProduct);
-      await this.saveProducts();
+      await this.saveProducts([newProduct]);
       this.resetUploadForm();
 
       // Recalculate creator level since they now have a new approved product
       this.recalculateUserCreatorLevel(this.currentUser);
-      await this.saveUsers();
+      await this.saveUsers([this.currentUser]);
 
       this.triggerCloudSyncToast("商品素材上傳成功！已即時上架！");
       alert("🎉 您的商品分鏡素材已成功上傳並即時上架！所有裝置（手機與電腦）均可同步看到！");
@@ -2369,7 +2378,7 @@ class AppEngine {
     const userIdx = this.users.findIndex(u => u.id === this.currentUser.id);
     if (userIdx !== -1) {
       this.users[userIdx] = this.currentUser;
-      this.saveUsers();
+      this.saveUsers([this.currentUser]);
     }
 
     this.triggerCloudSyncToast("銀行資料已綁定成功！");
@@ -2403,7 +2412,7 @@ class AppEngine {
     const userIdx = this.users.findIndex(u => u.id === this.currentUser.id);
     if (userIdx !== -1) {
       this.users[userIdx] = this.currentUser;
-      this.saveUsers();
+      this.saveUsers([this.currentUser]);
     }
 
     // Create withdrawal log
@@ -3027,7 +3036,7 @@ class AppEngine {
       if (creator) usersToSync.push(creator);
     }
     await this.saveUsers(usersToSync);
-    await this.saveProducts();
+    await this.saveProducts([product]);
 
     // Proactively refresh all UI stats and product lists instantly
     this.renderSellerStats();
@@ -3281,7 +3290,7 @@ class AppEngine {
     if (newName.trim() !== '') p.name = newName.trim();
     if (newPhoto.trim() !== '') p.photo_url = newPhoto.trim();
 
-    this.saveProducts();
+    this.saveProducts([p]);
 
     this.triggerCloudSyncToast("商品資訊已更新成功！");
     this.renderAdminPanels();
@@ -3308,7 +3317,7 @@ class AppEngine {
     }
 
     this.products = this.products.filter(p => p.id !== productId);
-    await this.saveProducts();
+    await this.saveProducts([]);
     this.triggerCloudSyncToast("商品素材已成功刪除！");
     this.renderCreatorProductsList();
     if (typeof this.renderAdminPanels === 'function') this.renderAdminPanels();
@@ -3331,7 +3340,7 @@ class AppEngine {
     // Splice from array
     if (p.scenes[sceneKey] && p.scenes[sceneKey][index]) {
       p.scenes[sceneKey].splice(index, 1);
-      this.saveProducts();
+      this.saveProducts([p]);
 
       this.triggerCloudSyncToast("影片分鏡已刪除成功！");
       this.renderAdminPanels();
@@ -3351,7 +3360,7 @@ class AppEngine {
     const newUrl = prompt("請輸入新的影片網址：", currentUrl);
     if (newUrl && newUrl.trim() !== '' && newUrl.trim() !== currentUrl) {
       p.scenes[sceneKey][index] = newUrl.trim();
-      this.saveProducts();
+      this.saveProducts([p]);
       this.triggerCloudSyncToast("影片網址已成功修改！");
       this.renderAdminPanels();
     }
@@ -3374,7 +3383,7 @@ class AppEngine {
     }
     
     this.products = this.products.filter(p => p.id !== productId);
-    this.saveProducts();
+    this.saveProducts([]);
     this.triggerCloudSyncToast("商品已成功刪除！");
     this.renderAdminPanels();
     this.renderProducts();
@@ -3619,7 +3628,7 @@ class AppEngine {
     if (!p) return;
 
     p.is_quality = !p.is_quality;
-    this.saveProducts();
+    this.saveProducts([p]);
 
     this.triggerCloudSyncToast(p.is_quality ? "已標記為高品質！" : "已取消高品質標籤！");
     this.renderAdminPanels();
@@ -3733,7 +3742,7 @@ class AppEngine {
 
     // 2. Perform local memory state filtering and save
     this.users = this.users.filter(x => x.id !== userId);
-    this.saveUsers();
+    this.saveUsers([]);
 
     this.triggerCloudSyncToast("使用者帳戶已刪除。");
     this.renderAdminPanels();

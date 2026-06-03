@@ -686,6 +686,22 @@ class AppEngine {
                 }
               }
 
+              // Restore category from scenes fallback if missing in DB schema
+              if (!p.category && p.scenes._category) {
+                p.category = p.scenes._category;
+              }
+              // Also recover from local backup if completely missing
+              if (!p.category) {
+                const memVersion = inMemoryProductsMap[p.id];
+                const localVersion = localProductsMap[p.id];
+                const bestSource = memVersion || localVersion;
+                if (bestSource && bestSource.category) {
+                  p.category = bestSource.category;
+                } else {
+                  p.category = 'others';
+                }
+              }
+
               p.status = 'approved'; // Force auto-approve all loaded products since review system is removed
             }
             return p;
@@ -842,6 +858,15 @@ class AppEngine {
           }
           p.status = 'approved'; // Force auto-approve locally
         }
+        
+        // Recover category from scenes fallback
+        if (!p.category && p.scenes && p.scenes._category) {
+          p.category = p.scenes._category;
+        }
+        if (!p.category) {
+          p.category = 'others';
+        }
+        
         return p;
       }).filter(p => p !== null);
     } else {
@@ -2300,6 +2325,11 @@ class AppEngine {
             break;
           }
         }
+      }
+      
+      // Store category inside scenes JSON in case the Supabase products table lacks the category column
+      if (scenesData) {
+        scenesData._category = category;
       }
 
       const newProduct = {

@@ -2042,6 +2042,17 @@ class AppEngine {
       const categoryEl = document.getElementById('upload-product-category');
       const category = categoryEl ? categoryEl.value : 'others';
 
+      // Populate video_url as a legacy fallback just in case their Supabase schema lacks the 'scenes' column
+      let legacyVideoUrl = "";
+      if (scenesData) {
+        for (const sc in scenesData) {
+          if (scenesData[sc] && scenesData[sc].length > 0) {
+            legacyVideoUrl = scenesData[sc][0]; // Save at least one video
+            break;
+          }
+        }
+      }
+
       const newProduct = {
         id: this.generateUUID(),
         creator_id: this.currentUser.id,
@@ -2049,6 +2060,7 @@ class AppEngine {
         name,
         category,
         photo_url: finalPhotoUrl,
+        video_url: legacyVideoUrl, // Added for schema backward compatibility
         status: "approved",
         downloads_count: 0,
         created_at: new Date().toISOString(),
@@ -2057,12 +2069,12 @@ class AppEngine {
       };
 
       this.products.push(newProduct);
-      this.saveProducts();
+      await this.saveProducts();
       this.resetUploadForm();
 
       // Recalculate creator level since they now have a new approved product
       this.recalculateUserCreatorLevel(this.currentUser);
-      this.saveUsers();
+      await this.saveUsers();
 
       this.triggerCloudSyncToast("商品素材上傳成功！已即時上架！");
       alert("🎉 您的商品分鏡素材已成功上傳並即時上架！所有裝置（手機與電腦）均可同步看到！");

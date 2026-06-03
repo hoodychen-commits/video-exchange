@@ -389,9 +389,20 @@
             <form id="creator-upload-form" onsubmit="app.handleCreatorUpload(event)">
               <!-- 1. Product Basic Info -->
               <div class="form-group row-fields">
-                <div class="field-item">
-                  <label class="required-lbl">產品名稱</label>
-                  <input type="text" id="upload-product-name" placeholder="請輸入產品名稱 (如: 極簡智能保溫杯)" required>
+                <div class="field-item" style="display: flex; flex-direction: column; gap: 16px;">
+                  <div>
+                    <label class="required-lbl">產品名稱</label>
+                    <input type="text" id="upload-product-name" placeholder="請輸入產品名稱 (如: 極簡智能保溫杯)" required oninput="app.autoDetectCategory(this.value)">
+                  </div>
+                  <div>
+                    <label class="required-lbl">商品分類 (對齊蝦皮分類)</label>
+                    <select id="upload-product-category" required>
+                      <!-- Populated dynamically by JS -->
+                    </select>
+                    <span class="auto-detect-tip" style="font-size: 11px; color: var(--color-creator); display: block; margin-top: 6px; font-weight: 500;">
+                      <i class="fa-solid fa-wand-magic-sparkles"></i> 系統將自動根據您輸入的名稱匹配蝦皮分類
+                    </span>
+                  </div>
                 </div>
                 <div class="field-item">
                   <label class="required-lbl">商品封面照片 (正方形 1:1 蝦皮比例)</label>
@@ -830,6 +841,11 @@
               <!-- Search and Categories -->
               <input type="text" id="seller-search" oninput="app.filterProducts()" placeholder="搜尋產品名稱...">
             </div>
+          </div>
+
+          <!-- Shopee Category Tabs -->
+          <div class="seller-categories-tabs" id="seller-categories-tabs">
+            <!-- Dynamically populated by JS -->
           </div>
 
           <!-- The Shopee-Style Grid -->

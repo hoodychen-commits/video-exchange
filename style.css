@@ -2796,3 +2796,78 @@ video.private-blur {
   transform: scale(1.05);
   box-shadow: 0 8px 20px rgba(238, 77, 45, 0.4);
 }
+
+/* -----------------------------------------
+   Shopee Product Categorization Styles
+----------------------------------------- */
+
+.seller-categories-tabs {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 10px 4px 16px 4px;
+  margin-bottom: 20px;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+.seller-categories-tabs::-webkit-scrollbar {
+  display: none; /* Safari & Chrome */
+}
+
+.category-tab-btn {
+  flex: 0 0 auto;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-light);
+  color: var(--text-muted);
+  padding: 8px 18px;
+  border-radius: 50px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: var(--shadow-sm);
+}
+
+.category-tab-btn:hover {
+  border-color: var(--color-seller);
+  color: var(--color-seller);
+  background-color: rgba(16, 185, 129, 0.02); /* slight green tint */
+}
+
+.category-tab-btn.active {
+  background-color: var(--color-seller-light);
+  border-color: var(--color-seller);
+  color: var(--color-seller);
+  box-shadow: 0 4px 10px rgba(16, 185, 129, 0.15);
+}
+
+.category-tab-btn i {
+  font-size: 12px;
+}
+
+.product-category-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-bottom: 6px;
+}
+
+.auto-detect-tip {
+  animation: pulse-tip 2s infinite ease-in-out;
+}
+
+@keyframes pulse-tip {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 1; transform: scale(1.01); }
+}

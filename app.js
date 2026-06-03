@@ -17,6 +17,24 @@ const DEMO_PHOTOS = [
   "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3"  // Shoes
 ];
 
+const SHOPEE_CATEGORIES = [
+  { id: "clothing-women", name: "女生衣著", icon: "fa-solid fa-person-dress" },
+  { id: "clothing-men", name: "男生衣著", icon: "fa-solid fa-shirt" },
+  { id: "beauty-care", name: "美妝保健", icon: "fa-solid fa-sparkles" },
+  { id: "mobiles-gadgets", name: "手機平板與周邊", icon: "fa-solid fa-mobile-screen-button" },
+  { id: "computers-peripherals", name: "3C電腦周邊", icon: "fa-solid fa-laptop" },
+  { id: "home-appliances", name: "家電影音", icon: "fa-solid fa-plug" },
+  { id: "home-living", name: "居家生活", icon: "fa-solid fa-couch" },
+  { id: "baby-toys", name: "母嬰玩具", icon: "fa-solid fa-baby-carriage" },
+  { id: "shoes-bags", name: "男女鞋包與配件", icon: "fa-solid fa-bag-shopping" },
+  { id: "sports-outdoors", name: "運動/戶外", icon: "fa-solid fa-person-running" },
+  { id: "automotive", name: "汽機車零件百貨", icon: "fa-solid fa-car" },
+  { id: "food-beverage", name: "美食、伴手禮", icon: "fa-solid fa-cookie-bite" },
+  { id: "pets", name: "寵物", icon: "fa-solid fa-paw" },
+  { id: "gaming-collectibles", name: "遊戲與娛樂收藏", icon: "fa-solid fa-gamepad" },
+  { id: "others", name: "其他類別", icon: "fa-solid fa-ellipsis" }
+];
+
 class AppEngine {
   constructor() {
     this.currentUser = null;
@@ -27,6 +45,7 @@ class AppEngine {
     this.activeCreatorTab = 'dashboard';
     this.adminActiveTab = 'approve-materials';
     this.adminProductFilter = 'pending';
+    this.sellerSelectedCategory = 'all';
     this.uploadedFiles = {
       unboxing: [],
       display: [],
@@ -62,6 +81,8 @@ class AppEngine {
     this.checkSession();
 
     // 5. Initial render
+    this.populateCreatorCategoryDropdown();
+    this.renderSellerCategoryTabs();
     this.renderNavigation();
     this.renderProducts();
     this.renderAdminPanels();
@@ -483,6 +504,7 @@ class AppEngine {
           creator_id: "usr_creator_01",
           creator_name: "陳阿明",
           name: "日系極簡雙層智能保溫杯 (Shopee 爆款)",
+          category: "home-living",
           photo_url: DEMO_PHOTOS[0],
           status: "approved",
           downloads_count: 72,
@@ -502,6 +524,7 @@ class AppEngine {
           creator_id: "usr_creator_01",
           creator_name: "陳阿明",
           name: "北歐風大理石不鏽鋼防水石英手錶",
+          category: "shoes-bags",
           photo_url: DEMO_PHOTOS[1],
           status: "approved",
           downloads_count: 24,
@@ -521,6 +544,7 @@ class AppEngine {
           creator_id: "usr_creator_01",
           creator_name: "陳阿明",
           name: "防滑高透氣編織運動慢跑鞋",
+          category: "shoes-bags",
           photo_url: DEMO_PHOTOS[2],
           status: "pending",
           downloads_count: 0,
@@ -700,6 +724,8 @@ class AppEngine {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
     // Update menus
+    this.populateCreatorCategoryDropdown();
+    this.renderSellerCategoryTabs();
     this.renderNavigation();
     this.renderUserGreeters();
     this.dismissGuard();
@@ -1235,12 +1261,20 @@ class AppEngine {
       // Cover photo
       const coverPhoto = p.photo_url || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=80&h=80&q=80';
 
+      const catObj = SHOPEE_CATEGORIES.find(c => c.id === p.category);
+      const catName = catObj ? catObj.name : "其他類別";
+
       html += `
         <tr>
           <td style="padding: 12px 8px;">
             <img src="${coverPhoto}" alt="${p.name}" style="width: 44px; height: 44px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border-color);">
           </td>
-          <td class="fw-bold text-dark" style="padding: 12px 8px; vertical-align: middle;">${p.name}</td>
+          <td class="fw-bold text-dark" style="padding: 12px 8px; vertical-align: middle;">
+            <div>${p.name}</div>
+            <div style="font-size: 11px; color: var(--text-light); font-weight: normal; margin-top: 4px;">
+              <i class="fa-solid fa-tag"></i> ${catName}
+            </div>
+          </td>
           <td style="padding: 12px 8px; vertical-align: middle;"><span class="badge bg-light text-dark" style="font-size: 11px;">${sceneCount} 個分鏡</span></td>
           <td style="padding: 12px 8px; vertical-align: middle;">${statusHtml}</td>
           <td style="padding: 12px 8px; vertical-align: middle;">
@@ -1542,11 +1576,15 @@ class AppEngine {
         }
       }
 
+      const categoryEl = document.getElementById('upload-product-category');
+      const category = categoryEl ? categoryEl.value : 'others';
+
       const newProduct = {
         id: "prod_" + Math.random().toString(36).substring(2, 11),
         creator_id: this.currentUser.id,
         creator_name: this.currentUser.name,
         name,
+        category,
         photo_url: finalPhotoUrl,
         status: "pending",
         downloads_count: 0,
@@ -1769,24 +1807,127 @@ class AppEngine {
     if (credEl) credEl.innerText = this.currentUser.seller_credits;
   }
 
+  populateCreatorCategoryDropdown() {
+    const selectEl = document.getElementById('upload-product-category');
+    if (!selectEl) return;
+    
+    // Only populate if empty or only placeholder exists
+    if (selectEl.options.length > 1) return;
+    
+    selectEl.innerHTML = '';
+    
+    const defaultOpt = document.createElement('option');
+    defaultOpt.value = '';
+    defaultOpt.innerText = '-- 請選擇商品分類 --';
+    defaultOpt.disabled = true;
+    defaultOpt.selected = true;
+    selectEl.appendChild(defaultOpt);
+
+    SHOPEE_CATEGORIES.forEach(cat => {
+      const opt = document.createElement('option');
+      opt.value = cat.id;
+      opt.innerText = cat.name;
+      selectEl.appendChild(opt);
+    });
+  }
+
+  autoDetectCategory(name) {
+    if (!name) return;
+    name = name.toLowerCase();
+    
+    const keywordMap = [
+      { category: "clothing-women", keywords: ["女裝", "洋裝", "裙", "內衣", "女款衣", "女生衣", "女外套", "比基尼", "女款", "女生", "女鞋", "女包", "女裝"] },
+      { category: "clothing-men", keywords: ["男裝", "男款衣", "男生衣", "西裝", "男外套", "男襯衫", "男款", "男生", "男鞋", "男包"] },
+      { category: "beauty-care", keywords: ["保養", "精華", "面膜", "乳液", "防曬", "彩妝", "口紅", "唇膏", "眼影", "粉底", "沐浴乳", "洗髮", "香水", "指甲油", "保健", "維他命", "酵素", "膠原", "美妝"] },
+      { category: "mobiles-gadgets", keywords: ["手機", "平板", "ipad", "iphone", "三星", "samsung", "小米", "充電", "行動電源", "傳輸線", "殼", "貼膜", "保護貼", "支架", "藍牙"] },
+      { category: "computers-peripherals", keywords: ["電腦", "滑鼠", "鍵盤", "筆電", "硬碟", "隨身碟", "顯示卡", "螢幕", "路由器", "wifi", "顯卡", "主機板"] },
+      { category: "home-appliances", keywords: ["電視", "冰箱", "洗衣機", "吹風機", "吸塵器", "掃地機", "烤箱", "微波爐", "電風扇", "空氣清淨", "熱水器", "除濕機", "耳機", "喇叭", "音響", "投影機", "家電", "影音", "投影"] },
+      { category: "home-living", keywords: ["杯", "壺", "保溫杯", "餐具", "碗", "盤", "收納", "枕", "床", "沙發", "椅", "桌", "燈", "窗簾", "地毯", "居家", "工具", "清潔", "五金", "衛浴", "廚房", "垃圾桶", "置物架", "床單"] },
+      { category: "baby-toys", keywords: ["母嬰", "尿布", "奶瓶", "嬰兒", "童裝", "玩具", "積木", "樂高", "模型", "公仔", "芭比", "遙控車", "童鞋", "圍兜"] },
+      { category: "shoes-bags", keywords: ["鞋", "慢跑鞋", "運動鞋", "帆布鞋", "皮鞋", "涼鞋", "拖鞋", "靴", "包", "後背包", "皮夾", "錢包", "手錶", "錶", "項鍊", "耳環", "戒指", "手鍊", "皮帶", "眼鏡", "墨鏡", "配件", "飾品"] },
+      { category: "sports-outdoors", keywords: ["運動", "健身", "啞鈴", "瑜珈", "跑步", "自行車", "單車", "露營", "帳篷", "登山", "釣魚", "泳鏡", "羽球", "籃球", "護膝", "護腕"] },
+      { category: "automotive", keywords: ["汽配", "機車", "汽車", "安全帽", "雨刷", "避震", "行車紀錄器", "測速", "洗車", "車用", "輪胎"] },
+      { category: "food-beverage", keywords: ["美食", "零食", "糖果", "餅乾", "蛋糕", "咖啡", "茶", "茶包", "伴手禮", "泡麵", "熟食", "飲料", "點心"] },
+      { category: "pets", keywords: ["寵物", "貓", "狗", "飼料", "罐頭", "貓砂", "牽繩", "寵物床", "魚缸", "罐罐"] },
+      { category: "gaming-collectibles", keywords: ["switch", "ps5", "xbox", "遊戲", "桌遊", "收藏", "動漫", "周邊", "紀念品", "卡牌"] }
+    ];
+
+    for (const item of keywordMap) {
+      for (const kw of item.keywords) {
+        if (name.includes(kw)) {
+          const selectEl = document.getElementById('upload-product-category');
+          if (selectEl) {
+            selectEl.value = item.category;
+          }
+          return;
+        }
+      }
+    }
+  }
+
+  renderSellerCategoryTabs() {
+    const tabsContainer = document.getElementById('seller-categories-tabs');
+    if (!tabsContainer) return;
+
+    tabsContainer.innerHTML = '';
+
+    // "All" tab first
+    const allBtn = document.createElement('button');
+    allBtn.className = `category-tab-btn ${this.sellerSelectedCategory === 'all' ? 'active' : ''}`;
+    allBtn.innerHTML = `<i class="fa-solid fa-list"></i> 全部`;
+    allBtn.onclick = () => {
+      this.sellerSelectedCategory = 'all';
+      this.renderSellerCategoryTabs();
+      this.renderProducts();
+    };
+    tabsContainer.appendChild(allBtn);
+
+    // Dynamic tabs
+    SHOPEE_CATEGORIES.forEach(cat => {
+      const btn = document.createElement('button');
+      btn.className = `category-tab-btn ${this.sellerSelectedCategory === cat.id ? 'active' : ''}`;
+      btn.innerHTML = `<i class="${cat.icon}"></i> ${cat.name}`;
+      btn.onclick = () => {
+        this.sellerSelectedCategory = cat.id;
+        this.renderSellerCategoryTabs();
+        this.renderProducts();
+      };
+      tabsContainer.appendChild(btn);
+    });
+  }
+
   renderProducts() {
     const grid = document.getElementById('seller-products-grid');
     if (!grid) return;
 
-    const approvedProds = this.products.filter(p => p.status === 'approved');
+    let approvedProds = this.products.filter(p => p.status === 'approved');
     
+    // Filter by active category
+    if (this.sellerSelectedCategory && this.sellerSelectedCategory !== 'all') {
+      approvedProds = approvedProds.filter(p => p.category === this.sellerSelectedCategory);
+    }
+
+    // Filter by search query
+    const query = (document.getElementById('seller-search')?.value || '').toLowerCase().trim();
+    if (query) {
+      approvedProds = approvedProds.filter(p => p.name.toLowerCase().includes(query));
+    }
+
     if (approvedProds.length === 0) {
-      grid.innerHTML = `<div style="grid-column: 1/-1; padding: 40px; text-align: center;" class="text-muted">素材庫中暫無審核通過的商品。請切换至後台審核或創作者中心上傳！</div>`;
+      grid.innerHTML = `<div style="grid-column: 1/-1; padding: 60px; text-align: center; background-color: var(--bg-secondary); border-radius: var(--radius-md); border: 1px dashed var(--border-light);" class="text-muted"><i class="fa-regular fa-folder-open" style="font-size: 32px; display: block; margin-bottom: 12px; color: var(--text-light);"></i>此分類下暫無符合篩選條件的商品素材 📦</div>`;
       return;
     }
 
     grid.innerHTML = '';
     approvedProds.forEach(p => {
-      // Calculate scene count
       let videoCount = 0;
       for (const sc in p.scenes) {
         videoCount += p.scenes[sc].length;
       }
+
+      // Find category name
+      const catObj = SHOPEE_CATEGORIES.find(c => c.id === p.category);
+      const catName = catObj ? catObj.name : "其他類別";
 
       const card = document.createElement('div');
       card.className = 'product-item-card';
@@ -1799,7 +1940,8 @@ class AppEngine {
           <span class="scenes-count-pill"><i class="fa-solid fa-film"></i> ${videoCount}分鏡</span>
         </div>
         <div class="product-card-body">
-          <h4 class="product-card-title">${p.name}</h4>
+          <span class="product-category-badge"><i class="fa-solid fa-tag"></i> ${catName}</span>
+          <h4 class="product-card-title" style="margin-top: 6px;">${p.name}</h4>
           <div class="product-card-meta">
             <span class="product-uploader-name"><i class="fa-solid fa-video"></i> ${p.creator_name}</span>
             <span class="product-cost-tag">扣 5 點</span>
@@ -1813,17 +1955,7 @@ class AppEngine {
   }
 
   filterProducts() {
-    const query = document.getElementById('seller-search').value.toLowerCase().trim();
-    const cards = document.querySelectorAll('#seller-products-grid .product-item-card');
-
-    cards.forEach(card => {
-      const name = card.querySelector('.product-card-title').innerText.toLowerCase();
-      if (name.includes(query)) {
-        card.classList.remove('hidden');
-      } else {
-        card.classList.add('hidden');
-      }
-    });
+    this.renderProducts();
   }
 
   renderSellerLeaderboards() {
@@ -2340,7 +2472,7 @@ class AppEngine {
                       <i class="fa-regular fa-pen-to-square"></i> 編輯標題
                     </button>
                   </h4>
-                  <span>創作者: <b>${p.creator_name}</b> • 狀態: <b class="${p.status === 'approved' ? 'text-seller' : 'text-amber'}">${p.status === 'approved' ? '已上架' : '待審核'}</b> • 提交於: ${new Date(p.created_at).toLocaleDateString()}</span>
+                  <span>分類: <b class="text-creator">${catName}</b> • 創作者: <b>${p.creator_name}</b> • 狀態: <b class="${p.status === 'approved' ? 'text-seller' : 'text-amber'}">${p.status === 'approved' ? '已上架' : '待審核'}</b> • 提交於: ${new Date(p.created_at).toLocaleDateString()}</span>
                 </div>
               </div>
               <div class="admin-action-btns">

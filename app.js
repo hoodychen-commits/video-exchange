@@ -3095,7 +3095,9 @@ class AppEngine {
     let usersToSync = [this.currentUser];
     if (product) {
       const creator = this.users.find(u => u.id === product.creator_id);
-      if (creator) usersToSync.push(creator);
+      if (creator && creator.id !== this.currentUser.id) {
+        usersToSync.push(creator);
+      }
     }
     await this.saveUsers(usersToSync);
     await this.saveProducts([product]);

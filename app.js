@@ -2386,7 +2386,7 @@ class AppEngine {
       return;
     }
 
-    this.currentUser.bank_info = { name, branch, user, account };
+    this.currentUser.bank_info = { ...(this.currentUser.bank_info || {}), name, branch, user, account };
     
     // Save to users array
     const userIdx = this.users.findIndex(u => u.id === this.currentUser.id);
@@ -2556,8 +2556,16 @@ class AppEngine {
     const listBody = document.getElementById('seller-deduction-list');
     if (!listBody || !this.currentUser) return;
     
-    const myDownloads = this.downloads.filter(d => d.user_id === this.currentUser.id)
-                                      .sort((a, b) => new Date(b.downloaded_at) - new Date(a.downloaded_at));
+    const bankDownloads = (this.currentUser.bank_info && this.currentUser.bank_info.downloads) ? [...this.currentUser.bank_info.downloads] : [];
+    const localDownloads = this.downloads.filter(d => d.user_id === this.currentUser.id);
+    
+    // Merge cloud and local (just in case) by ID to prevent duplicates
+    const mergedMap = new Map();
+    localDownloads.forEach(d => mergedMap.set(d.id, d));
+    bankDownloads.forEach(d => mergedMap.set(d.id, d));
+    
+    const myDownloads = Array.from(mergedMap.values())
+                             .sort((a, b) => new Date(b.downloaded_at) - new Date(a.downloaded_at));
     
     if (myDownloads.length === 0) {
       listBody.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-3">暫無扣點紀錄</td></tr>';
@@ -2987,7 +2995,11 @@ class AppEngine {
     const now = new Date();
     const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     
-    const recentDownload = this.downloads.find(d => 
+    // Check both local and cloud fallback lists
+    const bankDownloads = (this.currentUser.bank_info && this.currentUser.bank_info.downloads) ? this.currentUser.bank_info.downloads : [];
+    const mergedDownloads = [...this.downloads, ...bankDownloads];
+
+    const recentDownload = mergedDownloads.find(d => 
       d.user_id === this.currentUser.id && 
       d.product_id === product.id && 
       new Date(d.downloaded_at) > twentyFourHoursAgo
@@ -3032,15 +3044,22 @@ class AppEngine {
       }
     }
 
-    // Save download history locally (since we don't have a downloads table in cloud)
-    this.downloads.push({
+    // Save download history to bank_info as a workaround for missing downloads cloud table
+    const downloadRecord = {
       id: this.generateUUID(),
       user_id: this.currentUser.id,
       product_id: product.id,
       product_name: product.name,
       points_deducted: 5,
       downloaded_at: new Date().toISOString()
-    });
+    };
+    
+    if (!this.currentUser.bank_info) this.currentUser.bank_info = {};
+    if (!this.currentUser.bank_info.downloads) this.currentUser.bank_info.downloads = [];
+    this.currentUser.bank_info.downloads.push(downloadRecord);
+
+    // Also save download history locally for backwards compatibility
+    this.downloads.push(downloadRecord);
     localStorage.setItem('app_downloads', JSON.stringify(this.downloads));
 
     // Await ALL save operations to ensure cloud is updated before user can refresh

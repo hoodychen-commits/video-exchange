@@ -2435,6 +2435,7 @@ class AppEngine {
           <td>${lvlLabel}</td>
           <td>
             <div style="display:flex; gap:6px;">
+              <button class="btn btn-sm btn-outline" onclick="app.adminModifyUserCredits('${u.id}', 100)">+100 點</button>
               <button class="btn btn-sm btn-outline" onclick="app.adminModifyUserCredits('${u.id}', 1000)">+1000 點</button>
               ${u.role === 'creator' ? `<button class="btn btn-sm btn-outline" onclick="app.adminModifyUserLevel('${u.id}', 1)">升 1 級</button>` : ''}
               ${u.role !== 'admin' ? `<button class="btn btn-sm btn-outline text-danger" onclick="app.adminDeleteUser('${u.id}')"><i class="fa-solid fa-trash-can"></i></button>` : ''}

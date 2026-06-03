@@ -484,7 +484,26 @@ class AppEngine {
         // Load users from Supabase
         let { data: dbUsers, error: uErr } = await this.supabase.from('users').select('*');
         if (uErr) throw uErr;
-        this.users = dbUsers || [];
+        this.users = (dbUsers || []).map(u => {
+          if (u) {
+            if (!u.roles) {
+              u.roles = [u.role || 'creator'];
+            }
+            if (!u.role) {
+              u.role = u.roles[0];
+            }
+            // Sync seller_credits from database balance column for seller role
+            const isSeller = u.role === 'seller' || u.roles.includes('seller');
+            if (u.seller_credits === undefined) {
+              u.seller_credits = isSeller ? (Number(u.balance) || 0) : 0;
+            }
+            // For safety, clear balance for absolute sellers to avoid UI overlaps
+            if (isSeller && !u.roles.includes('creator')) {
+              u.balance = 0;
+            }
+          }
+          return u;
+        }).filter(u => u !== null);
 
         // If admin user is not found, automatically insert it
         const admin = this.users.find(u => u.id === 'c01f6ec0-e251-4b13-9876-000000000003' || u.id === 'usr_admin');
@@ -828,7 +847,13 @@ class AppEngine {
   async saveUsers() {
     localStorage.setItem('app_users', JSON.stringify(this.users));
     if (this.isCloudMode) {
-      let retryUsers = JSON.parse(JSON.stringify(this.users)).filter(u => u !== null);
+      let retryUsers = JSON.parse(JSON.stringify(this.users)).filter(u => u !== null).map(u => {
+        const isSeller = u.role === 'seller' || (u.roles && u.roles.includes('seller'));
+        if (isSeller) {
+          u.balance = u.seller_credits || 0;
+        }
+        return u;
+      });
       let success = false;
       let attempts = 0;
       

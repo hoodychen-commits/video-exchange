@@ -1707,7 +1707,7 @@ class AppEngine {
       const catName = catObj ? catObj.name : "其他類別";
 
       html += `
-        <tr>
+        <tr onclick="app.openProductDetailModal('${p.id}')" style="cursor: pointer; transition: background-color 0.2s;" onmouseover="this.style.backgroundColor='var(--bg-secondary)'" onmouseout="this.style.backgroundColor=''">
           <td style="padding: 12px 8px;">
             <img src="${coverPhoto}" alt="${p.name}" style="width: 44px; height: 44px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border-color);">
           </td>

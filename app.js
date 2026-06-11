@@ -2040,19 +2040,23 @@ class AppEngine {
         sceneCount = 1;
       }
 
-      // Status badge
+      // Status & Quality badges
       let statusHtml = '';
+      let qualityHtml = '<span class="text-muted" style="font-size: 11px;">-</span>'; // Default empty quality
+
       if (p.status === 'pending') {
         statusHtml = `<span class="badge bg-amber"><i class="fa-solid fa-spinner fa-spin"></i> 待審核</span>`;
       } else if (p.status === 'approved') {
         statusHtml = `<span class="badge bg-creator"><i class="fa-solid fa-circle-check"></i> 已上架</span>`;
         if (p.is_quality) {
-          statusHtml += ` <span class="badge bg-gold" style="background:#d97706; color:#ffffff;"><i class="fa-solid fa-gem"></i> 高品質</span>`;
+          qualityHtml = `<span class="badge bg-gold" style="background:#d97706; color:#ffffff;"><i class="fa-solid fa-gem"></i> 高品質</span>`;
+        } else {
+          qualityHtml = `<span class="badge bg-light text-dark">一般</span>`;
         }
       } else if (p.status === 'rejected') {
-        statusHtml = `<span class="badge bg-danger"><i class="fa-solid fa-circle-xmark"></i> 未通過 / 已下架</span>`;
+        statusHtml = `<span class="badge bg-danger"><i class="fa-solid fa-circle-xmark"></i> 已下架</span>`;
         if (p.is_low_quality) {
-          statusHtml += ` <span class="badge bg-danger" style="background:#b91c1c; color:#ffffff;"><i class="fa-solid fa-thumbs-down"></i> 低品質違規</span>`;
+          qualityHtml = `<span class="badge bg-danger" style="background:#b91c1c; color:#ffffff;"><i class="fa-solid fa-thumbs-down"></i> 低品質違規</span>`;
         }
       }
 
@@ -2082,13 +2086,14 @@ class AppEngine {
           </td>
           <td style="padding: 12px 8px; vertical-align: middle;"><span class="badge bg-light text-dark" style="font-size: 11px;">${sceneCount} 個分鏡</span></td>
           <td style="padding: 12px 8px; vertical-align: middle;">${statusHtml}</td>
+          <td style="padding: 12px 8px; vertical-align: middle; text-align: center;">${qualityHtml}</td>
           <td style="padding: 12px 8px; vertical-align: middle;">
             <span style="font-size: 14px; font-weight: 700; color: var(--color-seller);">
               <i class="fa-solid fa-download"></i> ${p.downloads_count || 0} 次
             </span>
           </td>
-          <td style="color: var(--text-muted); font-size: 12px;">${dateStr}</td>
-          <td>
+          <td style="color: var(--text-muted); font-size: 12px; vertical-align: middle;">${dateStr}</td>
+          <td style="vertical-align: middle;">
             <button class="btn btn-sm btn-outline" style="padding: 4px 8px; font-size: 11px;" onclick="event.stopPropagation(); app.openProductDetailModal('${p.id}')">檢視</button>
             <button class="btn btn-sm btn-outline" style="padding: 4px 8px; font-size: 11px; margin-left: 4px;" onclick="event.stopPropagation(); app.editProduct('${p.id}')">編輯</button>
             <button class="btn btn-sm btn-outline text-danger" style="padding: 4px 8px; font-size: 11px; margin-left: 4px;" onclick="event.stopPropagation(); app.creatorDeleteProduct('${p.id}')">刪除</button>

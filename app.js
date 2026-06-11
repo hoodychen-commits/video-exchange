@@ -573,12 +573,23 @@ class AppEngine {
             const isSeller = u.role === 'seller' || u.roles.includes('seller');
             const isCreator = u.role === 'creator' || u.roles.includes('creator');
             
-            // Decode seller_credits from email if it was encoded
+            // Decode seller_credits and level_override from email if it was encoded
             let decodedSc = null;
-            if (u.email && typeof u.email === 'string' && u.email.includes('|SC:')) {
-              const parts = u.email.split('|SC:');
-              u.email = parts[0];
-              decodedSc = parseInt(parts[1], 10);
+            let decodedLo = null;
+            if (u.email && typeof u.email === 'string') {
+              if (u.email.includes('|LO:')) {
+                const parts = u.email.split('|LO:');
+                decodedLo = parseInt(parts[1], 10);
+                u.email = parts[0];
+              }
+              if (u.email.includes('|SC:')) {
+                const parts = u.email.split('|SC:');
+                decodedSc = parseInt(parts[1], 10);
+                u.email = parts[0];
+              }
+            }
+            if (decodedLo !== null && !isNaN(decodedLo)) {
+              u.level_override = decodedLo;
             }
 
             if (isSeller) {
@@ -1101,13 +1112,17 @@ class AppEngine {
         const isCreator = u.role === 'creator' || (u.roles && u.roles.includes('creator'));
         if (isSeller) {
           if (!isCreator) {
+            // Pure seller: read from Supabase balance column
             u.balance = Number(u.seller_credits) || 0;
-          } else {
-            // Dual-role: DB lacks seller_credits column, so we encode it in the email string for cloud sync
-            if (!u.email) u.email = "user@material.exchange";
-            u.email = u.email.split('|SC:')[0] + '|SC:' + (Number(u.seller_credits) || 0);
           }
         }
+        // Encode missing columns into email for cloud sync
+        if (!u.email) u.email = "user@material.exchange";
+        let emailBase = u.email.split('|SC:')[0].split('|LO:')[0];
+        let extra = "";
+        if (isSeller && isCreator && Number(u.seller_credits)) extra += '|SC:' + Number(u.seller_credits);
+        if (u.level_override !== undefined && u.level_override !== null) extra += '|LO:' + u.level_override;
+        u.email = emailBase + extra;
         return u;
       });
       let success = false;
@@ -1342,15 +1357,24 @@ class AppEngine {
             if (!dbU.roles) dbU.roles = [dbU.role || 'creator'];
             if (!dbU.role) dbU.role = dbU.roles[0];
 
-            // Decode seller_credits properly (same logic as loadState)
+            // Decode seller_credits and level_override properly (same logic as loadState)
             const isSeller = dbU.role === 'seller' || (dbU.roles && dbU.roles.includes('seller'));
             const isCreator = dbU.role === 'creator' || (dbU.roles && dbU.roles.includes('creator'));
             let decodedSc = null;
-            if (dbU.email && typeof dbU.email === 'string' && dbU.email.includes('|SC:')) {
-              const parts = dbU.email.split('|SC:');
-              dbU.email = parts[0];
-              decodedSc = parseInt(parts[1], 10);
+            let decodedLo = null;
+            if (dbU.email && typeof dbU.email === 'string') {
+              if (dbU.email.includes('|LO:')) {
+                const parts = dbU.email.split('|LO:');
+                decodedLo = parseInt(parts[1], 10);
+                dbU.email = parts[0];
+              }
+              if (dbU.email.includes('|SC:')) {
+                const parts = dbU.email.split('|SC:');
+                decodedSc = parseInt(parts[1], 10);
+                dbU.email = parts[0];
+              }
             }
+            if (decodedLo !== null && !isNaN(decodedLo)) dbU.level_override = decodedLo;
             if (isSeller) {
               if (!isCreator) {
                 dbU.seller_credits = Number(dbU.balance) || 0;

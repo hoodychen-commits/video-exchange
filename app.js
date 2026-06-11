@@ -2178,6 +2178,12 @@ class AppEngine {
     const hasCreatorRole = user.role === 'creator' || user.roles.includes('creator');
     if (!hasCreatorRole) return;
 
+    // 如果管理員已手動設定等級 (level_override)，優先使用，不自動覆蓋
+    if (user.level_override !== undefined && user.level_override !== null && user.level_override > 0) {
+      user.level = user.level_override;
+      return;
+    }
+
     const myApproved = this.products.filter(p => p && p.creator_id === user.id && p.status === 'approved');
     const highQualityCount = myApproved.filter(p => p && p.is_quality).length;
 
@@ -3696,7 +3702,10 @@ class AppEngine {
           balLabel = `TWD $${(Number(u.balance) || 0).toFixed(2)}`;
         }
 
-        let lvlLabel = u.roles && u.roles.includes('creator') ? `LV.${u.level} 分成` : `LV.${u.level} 一般`;
+        const isOverridden = u.level_override !== undefined && u.level_override !== null && u.level_override > 0;
+        let lvlLabel = u.roles && u.roles.includes('creator') 
+          ? `LV.${u.level} 分成${isOverridden ? ' <span style="font-size:9px;color:#f59e0b;font-weight:700;">✋手動</span>' : ' <span style="font-size:9px;color:#6b7280;">⚙自動</span>'}` 
+          : `LV.${u.level} 一般`;
 
         let modifyButtonsHtml = '';
         const hasCreator = u.role === 'creator' || (u.roles && u.roles.includes('creator'));
@@ -3715,7 +3724,23 @@ class AppEngine {
           `;
         }
 
-
+        if (hasCreator) {
+          const isLvlOverridden = u.level_override !== undefined && u.level_override !== null && u.level_override > 0;
+          modifyButtonsHtml += `
+            <div style="display:flex; flex-direction:column; gap:4px; border:1px solid rgba(79,70,229,0.2); padding:6px; border-radius:4px; background:rgba(79,70,229,0.02); min-width:180px;">
+              <span style="font-size:10px; font-weight:700; color:var(--color-creator);">[管理創作者等級] ${isLvlOverridden ? '<span style="color:#f59e0b;">✋手動模式</span>' : '<span style="color:#6b7280;">⚙自動模式</span>'}</span>
+              <div style="display:flex; gap:4px; flex-wrap:wrap; align-items:center;">
+                <button class="btn btn-sm btn-outline" style="padding:2px 8px; font-size:11px; height:26px;" onclick="app.adminModifyUserLevel('${u.id}', 1)"><i class="fa-solid fa-angles-up"></i> 升級</button>
+                <button class="btn btn-sm btn-outline" style="padding:2px 8px; font-size:11px; height:26px;" onclick="app.adminModifyUserLevel('${u.id}', -1)"><i class="fa-solid fa-angles-down"></i> 降級</button>
+              </div>
+              <div style="display:flex; gap:4px; flex-wrap:wrap; align-items:center; margin-top:2px;">
+                <input type="number" id="admin-level-input-${u.id}" class="form-control" style="padding:2px 6px; font-size:12px; height:26px; width:55px;" placeholder="1-10" min="1" max="10" value="">
+                <button class="btn btn-sm btn-creator" style="padding:2px 8px; font-size:11px; height:26px;" onclick="app.adminSetUserLevel('${u.id}')"><i class="fa-solid fa-sliders"></i> 設定</button>
+                ${isLvlOverridden ? `<button class="btn btn-sm btn-outline" style="padding:2px 8px; font-size:11px; height:26px; border-color:rgba(107,114,128,0.3); color:#6b7280;" onclick="app.adminResetUserLevel('${u.id}')"><i class="fa-solid fa-rotate-left"></i> 自動</button>` : ''}
+              </div>
+            </div>
+          `;
+        }
 
         row.innerHTML = `
           <td><b>${u.name}</b></td>
@@ -3728,7 +3753,6 @@ class AppEngine {
             <div style="display:flex; flex-direction:column; gap:4px; align-items:stretch;">
               ${modifyButtonsHtml}
               <div style="display:flex; gap:6px; align-items:center; margin-top:4px; justify-content:flex-start;">
-                ${hasCreator ? `<button class="btn btn-sm btn-outline" style="padding:2px 8px; height:auto; font-size:11px;" onclick="app.adminModifyUserLevel('${u.id}', 1)"><i class="fa-solid fa-angles-up"></i> 升 1 級</button>` : ''}
                 ${u.role !== 'admin' && (!u.roles || !u.roles.includes('admin')) ? `<button class="btn btn-sm btn-outline text-danger" style="padding:2px 8px; height:auto; font-size:11px;" onclick="app.adminDeleteUser('${u.id}')"><i class="fa-solid fa-trash-can"></i> 刪除帳戶</button>` : ''}
               </div>
             </div>
@@ -3821,16 +3845,76 @@ class AppEngine {
     this.renderNavigation();
   }
 
-  adminModifyUserLevel(userId, change) {
+  async adminModifyUserLevel(userId, change) {
     const u = this.users.find(x => x.id === userId);
     if (!u) return;
 
-    u.level = Math.min(10, u.level + change);
-    this.saveUsers([u]);
+    const newLevel = Math.max(1, Math.min(10, (u.level || 1) + change));
+    u.level = newLevel;
+    u.level_override = newLevel; // 標記為管理員手動設定，防止自動計算覆蓋
 
-    this.triggerCloudSyncToast("創作者等級已手動調整完成！");
+    // 同步 currentUser 引用（如果被修改的用戶是當前登入的用戶）
+    if (this.currentUser && this.currentUser.id === userId) {
+      this.currentUser.level = newLevel;
+      this.currentUser.level_override = newLevel;
+    }
+
+    await this.saveUsers([u]);
+
+    this.triggerCloudSyncToast(`創作者等級已手動調整為 LV.${newLevel}！已同步至所有裝置！`);
     this.renderAdminPanels();
-    this.renderCreatorStats();
+  }
+
+  async adminSetUserLevel(userId) {
+    const inputEl = document.getElementById(`admin-level-input-${userId}`);
+    if (!inputEl) return;
+
+    const level = parseInt(inputEl.value, 10);
+    if (isNaN(level) || level < 1 || level > 10) {
+      alert("請輸入 1 到 10 之間的等級數字！");
+      return;
+    }
+
+    const u = this.users.find(x => x.id === userId);
+    if (!u) return;
+
+    u.level = level;
+    u.level_override = level; // 標記為管理員手動設定
+
+    // 同步 currentUser 引用
+    if (this.currentUser && this.currentUser.id === userId) {
+      this.currentUser.level = level;
+      this.currentUser.level_override = level;
+    }
+
+    await this.saveUsers([u]);
+
+    this.triggerCloudSyncToast(`創作者等級已設定為 LV.${level}！已同步至所有裝置！`);
+    inputEl.value = '';
+    this.renderAdminPanels();
+  }
+
+  async adminResetUserLevel(userId) {
+    const u = this.users.find(x => x.id === userId);
+    if (!u) return;
+
+    if (!confirm(`確定要將 ${u.name} 的等級重置為自動計算模式嗎？\n系統會根據上傳數量和高品質標章自動計算等級。`)) return;
+
+    // 清除手動設定標記
+    u.level_override = null;
+
+    // 同步 currentUser 引用
+    if (this.currentUser && this.currentUser.id === userId) {
+      this.currentUser.level_override = null;
+    }
+
+    // 重新計算等級
+    this.recalculateUserCreatorLevel(u);
+
+    await this.saveUsers([u]);
+
+    this.triggerCloudSyncToast(`${u.name} 的等級已重置為自動計算模式 (LV.${u.level})！`);
+    this.renderAdminPanels();
   }
 
   async adminDeleteUser(userId) {

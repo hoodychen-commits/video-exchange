@@ -2050,7 +2050,10 @@ class AppEngine {
           statusHtml += ` <span class="badge bg-gold" style="background:#d97706; color:#ffffff;"><i class="fa-solid fa-gem"></i> 高品質</span>`;
         }
       } else if (p.status === 'rejected') {
-        statusHtml = `<span class="badge bg-danger"><i class="fa-solid fa-circle-xmark"></i> 未通過</span>`;
+        statusHtml = `<span class="badge bg-danger"><i class="fa-solid fa-circle-xmark"></i> 未通過 / 已下架</span>`;
+        if (p.is_low_quality) {
+          statusHtml += ` <span class="badge bg-danger" style="background:#b91c1c; color:#ffffff;"><i class="fa-solid fa-thumbs-down"></i> 低品質違規</span>`;
+        }
       }
 
       // Format date

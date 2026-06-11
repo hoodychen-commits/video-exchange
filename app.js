@@ -2014,6 +2014,22 @@ class AppEngine {
     const listBody = document.getElementById('my-products-portfolio-list');
     if (!listBody) return;
 
+    // Update Penalty Progress Bar
+    const penaltyText = document.getElementById('portfolio-penalty-text');
+    const penaltyBar = document.getElementById('portfolio-penalty-bar');
+    if (penaltyText && penaltyBar && this.currentUser) {
+      const pCount = this.currentUser.low_quality_count || 0;
+      penaltyText.innerText = `${pCount} / 10`;
+      penaltyBar.style.width = `${Math.min(100, (pCount / 10) * 100)}%`;
+      if (pCount >= 8) {
+        penaltyBar.style.backgroundColor = 'var(--color-danger)';
+      } else if (pCount >= 4) {
+        penaltyBar.style.backgroundColor = '#eab308'; // Warning yellow
+      } else {
+        penaltyBar.style.backgroundColor = '#22c55e'; // Safe green
+      }
+    }
+
     // Filter products belonging to this creator
     const myProducts = this.products.filter(p => p.creator_id === this.currentUser.id);
     

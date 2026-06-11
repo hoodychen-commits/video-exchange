@@ -525,8 +525,24 @@
 
           <!-- My Uploaded Products Portfolio -->
           <div class="card" id="my-products-portfolio" style="margin-top: 24px;">
-            <h3><i class="fa-solid fa-list-check text-creator"></i> 我上傳的商品素材列表</h3>
-            <p class="section-desc">您目前為止上傳的所有商品、審核狀態以及帶貨主播下載統計：</p>
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
+              <div>
+                <h3><i class="fa-solid fa-list-check text-creator"></i> 我上傳的商品素材列表</h3>
+                <p class="section-desc">您目前為止上傳的所有商品、審核狀態以及帶貨主播下載統計：</p>
+              </div>
+              
+              <!-- Quality Penalty Progress Bar -->
+              <div class="penalty-progress-container" style="background: var(--bg-secondary); border: 1px dashed var(--color-danger); border-radius: 8px; padding: 12px 16px; width: 100%; max-width: 320px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12px; font-weight: 700;">
+                  <span style="color: var(--text-main);"><i class="fa-solid fa-triangle-exclamation text-danger"></i> 低品質違規記點</span>
+                  <span id="portfolio-penalty-text" style="color: var(--color-danger);">0 / 10</span>
+                </div>
+                <div style="width: 100%; background: #e5e7eb; height: 8px; border-radius: 4px; overflow: hidden;">
+                  <div id="portfolio-penalty-bar" style="width: 0%; height: 100%; background: #22c55e; transition: width 0.3s ease, background-color 0.3s ease;"></div>
+                </div>
+                <div style="font-size: 10px; color: var(--text-muted); margin-top: 6px; text-align: right;">⚠️ 滿 10 分將自動刪除帳號並取消收益</div>
+              </div>
+            </div>
             
             <div class="table-responsive mt-3">
               <table class="data-table">

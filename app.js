@@ -573,10 +573,16 @@ class AppEngine {
             const isSeller = u.role === 'seller' || u.roles.includes('seller');
             const isCreator = u.role === 'creator' || u.roles.includes('creator');
             
-            // Decode seller_credits and level_override from email if it was encoded
+            // Decode seller_credits, level_override, and low_quality_count from email
             let decodedSc = null;
             let decodedLo = null;
+            let decodedLqc = null;
             if (u.email && typeof u.email === 'string') {
+              if (u.email.includes('|LQC:')) {
+                const parts = u.email.split('|LQC:');
+                decodedLqc = parseInt(parts[1], 10);
+                u.email = parts[0];
+              }
               if (u.email.includes('|LO:')) {
                 const parts = u.email.split('|LO:');
                 decodedLo = parseInt(parts[1], 10);
@@ -590,6 +596,9 @@ class AppEngine {
             }
             if (decodedLo !== null && !isNaN(decodedLo)) {
               u.level_override = decodedLo;
+            }
+            if (decodedLqc !== null && !isNaN(decodedLqc)) {
+              u.low_quality_count = decodedLqc;
             }
 
             if (isSeller) {
@@ -1118,10 +1127,11 @@ class AppEngine {
         }
         // Encode missing columns into email for cloud sync
         if (!u.email) u.email = "user@material.exchange";
-        let emailBase = u.email.split('|SC:')[0].split('|LO:')[0];
+        let emailBase = u.email.split('|SC:')[0].split('|LO:')[0].split('|LQC:')[0];
         let extra = "";
         if (isSeller && isCreator && Number(u.seller_credits)) extra += '|SC:' + Number(u.seller_credits);
         if (u.level_override !== undefined && u.level_override !== null) extra += '|LO:' + u.level_override;
+        if (u.low_quality_count !== undefined && u.low_quality_count !== null) extra += '|LQC:' + u.low_quality_count;
         u.email = emailBase + extra;
         return u;
       });
@@ -1357,12 +1367,18 @@ class AppEngine {
             if (!dbU.roles) dbU.roles = [dbU.role || 'creator'];
             if (!dbU.role) dbU.role = dbU.roles[0];
 
-            // Decode seller_credits and level_override properly (same logic as loadState)
+            // Decode seller_credits, level_override, low_quality_count properly (same logic as loadState)
             const isSeller = dbU.role === 'seller' || (dbU.roles && dbU.roles.includes('seller'));
             const isCreator = dbU.role === 'creator' || (dbU.roles && dbU.roles.includes('creator'));
             let decodedSc = null;
             let decodedLo = null;
+            let decodedLqc = null;
             if (dbU.email && typeof dbU.email === 'string') {
+              if (dbU.email.includes('|LQC:')) {
+                const parts = dbU.email.split('|LQC:');
+                decodedLqc = parseInt(parts[1], 10);
+                dbU.email = parts[0];
+              }
               if (dbU.email.includes('|LO:')) {
                 const parts = dbU.email.split('|LO:');
                 decodedLo = parseInt(parts[1], 10);
@@ -1375,6 +1391,7 @@ class AppEngine {
               }
             }
             if (decodedLo !== null && !isNaN(decodedLo)) dbU.level_override = decodedLo;
+            if (decodedLqc !== null && !isNaN(decodedLqc)) dbU.low_quality_count = decodedLqc;
             if (isSeller) {
               if (!isCreator) {
                 dbU.seller_credits = Number(dbU.balance) || 0;
@@ -2148,11 +2165,17 @@ class AppEngine {
     const emailEl = document.getElementById('profile-user-email');
     const walletEl = document.getElementById('profile-user-wallet');
     const levelEl = document.getElementById('profile-user-level');
+    const penaltyEl = document.getElementById('profile-user-penalty');
     const switchContainer = document.getElementById('profile-switch-role-container');
 
     if (nameEl) nameEl.innerText = this.currentUser.name;
     if (phoneEl) phoneEl.innerHTML = `<i class="fa-solid fa-phone"></i> ${this.currentUser.phone}`;
-    if (emailEl) emailEl.innerText = this.currentUser.email || '未設定';
+    if (emailEl) emailEl.innerText = this.currentUser.email ? this.currentUser.email.split('|')[0] : '未設定'; // Clean email display
+    if (penaltyEl) {
+        const penaltyCount = this.currentUser.low_quality_count || 0;
+        penaltyEl.innerText = `${penaltyCount} / 10`;
+        penaltyEl.style.color = penaltyCount >= 8 ? 'var(--color-danger)' : (penaltyCount >= 4 ? '#eab308' : '#22c55e');
+    }
     
     // Wallet / points display based on active role
     if (walletEl) {
@@ -2438,12 +2461,23 @@ class AppEngine {
       
       this.resetUploadForm();
 
+      // Award 5 seller_credits for uploading a new product
+      this.currentUser.seller_credits = (Number(this.currentUser.seller_credits) || 0) + 5;
+      
+      // Automatically assign seller role if not present
+      if (!this.currentUser.roles.includes('seller')) {
+        this.currentUser.roles.push('seller');
+        if (this.currentUser.role !== 'seller' && this.currentUser.role !== 'creator') {
+            this.currentUser.role = 'creator'; // Default base role
+        }
+      }
+
       // Recalculate creator level since they now have a new approved product
       this.recalculateUserCreatorLevel(this.currentUser);
       await this.saveUsers([this.currentUser]);
 
-      this.triggerCloudSyncToast("商品素材上傳成功！已即時上架！");
-      alert("🎉 您的商品分鏡素材已成功上傳並即時上架！所有裝置（手機與電腦）均可同步看到！");
+      this.triggerCloudSyncToast("商品素材上傳成功！已即時上架並獲得 5 點積分！");
+      alert("🎉 您的商品分鏡素材已成功上傳並即時上架！所有裝置（手機與電腦）均可同步看到！\n🎁 恭喜！您已獲得 5 點帶貨積分！");
       
       this.renderCreatorStats();
       this.renderAdminPanels();
@@ -3461,6 +3495,12 @@ class AppEngine {
         return;
       }
     }
+    // Deduct credits based on quality
+    const pointsToDeduct = p.is_quality ? 20 : 5;
+    this.currentUser.seller_credits = Math.max(0, (Number(this.currentUser.seller_credits) || 0) - pointsToDeduct);
+    const uIdx = this.users.findIndex(u => u.id === this.currentUser.id);
+    if (uIdx !== -1) this.users[uIdx].seller_credits = this.currentUser.seller_credits;
+    this.saveUsers([this.currentUser]);
 
     this.products = this.products.filter(p => p.id !== productId);
     await this.saveProducts([]);
@@ -3528,6 +3568,13 @@ class AppEngine {
       }
     }
     
+    // Deduct credits based on quality
+    const pointsToDeduct = p.is_quality ? 20 : 5;
+    this.currentUser.seller_credits = Math.max(0, (Number(this.currentUser.seller_credits) || 0) - pointsToDeduct);
+    const uIdx = this.users.findIndex(u => u.id === this.currentUser.id);
+    if (uIdx !== -1) this.users[uIdx].seller_credits = this.currentUser.seller_credits;
+    this.saveUsers([this.currentUser]);
+
     this.products = this.products.filter(p => p.id !== productId);
     this.saveProducts([]);
     this.triggerCloudSyncToast("商品已成功刪除！");
@@ -3654,6 +3701,9 @@ class AppEngine {
               <div class="admin-action-btns">
                 <button class="btn btn-sm ${p.is_quality ? 'btn-outline' : 'btn-seller'}" onclick="app.adminToggleQuality('${p.id}')">
                   <i class="fa-solid fa-gem"></i> ${p.is_quality ? '取消高品質標章' : '設為高品質'}
+                </button>
+                <button class="btn btn-sm ${p.is_low_quality ? 'btn-outline' : 'btn-outline text-danger'}" onclick="app.adminToggleLowQuality('${p.id}')">
+                  <i class="fa-solid fa-thumbs-down"></i> ${p.is_low_quality ? '取消低品質 (恢復上架)' : '設為低品質 (記點並下架)'}
                 </button>
               </div>
             </div>
@@ -3800,7 +3850,48 @@ class AppEngine {
     p.is_quality = !p.is_quality;
     this.saveProducts([p]);
 
+    // Give or revoke bonus 15 credits to the creator
+    const creator = this.users.find(u => u.id === p.creator_id);
+    if (creator) {
+      if (p.is_quality) {
+        creator.seller_credits = (Number(creator.seller_credits) || 0) + 15;
+      } else {
+        creator.seller_credits = Math.max(0, (Number(creator.seller_credits) || 0) - 15);
+      }
+      this.saveUsers([creator]);
+      if (this.currentUser && this.currentUser.id === creator.id) {
+         this.currentUser.seller_credits = creator.seller_credits;
+      }
+    }
+
     this.triggerCloudSyncToast(p.is_quality ? "已標記為高品質！" : "已取消高品質標籤！");
+    this.renderAdminPanels();
+    this.renderProducts();
+  }
+
+  async adminToggleLowQuality(productId) {
+    const p = this.products.find(x => x.id === productId);
+    if (!p) return;
+
+    p.is_low_quality = !p.is_low_quality;
+    p.status = p.is_low_quality ? 'rejected' : 'approved'; // Hide from frontend if low quality
+    this.saveProducts([p]);
+
+    const creator = this.users.find(u => u.id === p.creator_id);
+    if (creator) {
+      creator.low_quality_count = (Number(creator.low_quality_count) || 0) + (p.is_low_quality ? 1 : -1);
+      creator.low_quality_count = Math.max(0, creator.low_quality_count);
+      
+      this.saveUsers([creator]);
+
+      if (creator.low_quality_count >= 10) {
+         alert(`🚨 警告：創作者 ${creator.name} 的低品質影片違規記點已達 ${creator.low_quality_count} 點，系統將自動刪除該帳號並取消所有收益！`);
+         await this.adminDeleteUser(creator.id);
+         return; // User is deleted, no need to render panels below
+      }
+    }
+
+    this.triggerCloudSyncToast(p.is_low_quality ? "已標記為低品質並下架！" : "已取消低品質標籤並重新上架！");
     this.renderAdminPanels();
     this.renderProducts();
   }

@@ -3554,6 +3554,8 @@ class AppEngine {
 
   async adminDeleteProduct(productId) {
     if (!confirm("⚠️ 警告：確定要刪除整個商品及其所有分鏡嗎？\n此動作無法復原！")) return;
+    const p = this.products.find(x => x.id === productId);
+    if (!p) return;
     
     if (this.isCloudMode) {
       try {
@@ -3568,12 +3570,16 @@ class AppEngine {
       }
     }
     
-    // Deduct credits based on quality
+    // Deduct credits based on quality from the creator
     const pointsToDeduct = p.is_quality ? 20 : 5;
-    this.currentUser.seller_credits = Math.max(0, (Number(this.currentUser.seller_credits) || 0) - pointsToDeduct);
-    const uIdx = this.users.findIndex(u => u.id === this.currentUser.id);
-    if (uIdx !== -1) this.users[uIdx].seller_credits = this.currentUser.seller_credits;
-    this.saveUsers([this.currentUser]);
+    const creator = this.users.find(u => u.id === p.creator_id);
+    if (creator) {
+      creator.seller_credits = Math.max(0, (Number(creator.seller_credits) || 0) - pointsToDeduct);
+      this.saveUsers([creator]);
+      if (this.currentUser && this.currentUser.id === creator.id) {
+         this.currentUser.seller_credits = creator.seller_credits;
+      }
+    }
 
     this.products = this.products.filter(p => p.id !== productId);
     this.saveProducts([]);

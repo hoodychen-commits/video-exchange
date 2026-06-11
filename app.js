@@ -3703,9 +3703,10 @@ class AppEngine {
         }
 
         const isOverridden = u.level_override !== undefined && u.level_override !== null && u.level_override > 0;
-        let lvlLabel = u.roles && u.roles.includes('creator') 
-          ? `LV.${u.level} 分成${isOverridden ? ' <span style="font-size:9px;color:#f59e0b;font-weight:700;">✋手動</span>' : ' <span style="font-size:9px;color:#6b7280;">⚙自動</span>'}` 
-          : `LV.${u.level} 一般`;
+        const isAdminUser = u.role === 'admin' || (u.roles && u.roles.includes('admin'));
+        let lvlLabel = isAdminUser 
+          ? `LV.${u.level} 管理員`
+          : `LV.${u.level} ${u.roles && u.roles.includes('creator') ? '分成' : '一般'}${isOverridden ? ' <span style="font-size:9px;color:#f59e0b;font-weight:700;">✋手動</span>' : ' <span style="font-size:9px;color:#6b7280;">⚙自動</span>'}`;
 
         let modifyButtonsHtml = '';
         const hasCreator = u.role === 'creator' || (u.roles && u.roles.includes('creator'));
@@ -3724,18 +3725,23 @@ class AppEngine {
           `;
         }
 
-        if (hasCreator) {
+        if (hasCreator || hasSeller) {
           const isLvlOverridden = u.level_override !== undefined && u.level_override !== null && u.level_override > 0;
+          const roleColor = hasCreator ? 'rgba(79,70,229,0.2)' : 'rgba(16,185,129,0.2)';
+          const roleBgColor = hasCreator ? 'rgba(79,70,229,0.02)' : 'rgba(16,185,129,0.02)';
+          const roleLabel = hasCreator ? '創作者' : '帶貨主播';
+          const roleCssVar = hasCreator ? 'var(--color-creator)' : 'var(--color-seller)';
+          const btnClass = hasCreator ? 'btn-creator' : 'btn-seller';
           modifyButtonsHtml += `
-            <div style="display:flex; flex-direction:column; gap:4px; border:1px solid rgba(79,70,229,0.2); padding:6px; border-radius:4px; background:rgba(79,70,229,0.02); min-width:180px;">
-              <span style="font-size:10px; font-weight:700; color:var(--color-creator);">[管理創作者等級] ${isLvlOverridden ? '<span style="color:#f59e0b;">✋手動模式</span>' : '<span style="color:#6b7280;">⚙自動模式</span>'}</span>
+            <div style="display:flex; flex-direction:column; gap:4px; border:1px solid ${roleColor}; padding:6px; border-radius:4px; background:${roleBgColor}; min-width:180px;">
+              <span style="font-size:10px; font-weight:700; color:${roleCssVar};">[管理${roleLabel}等級] ${isLvlOverridden ? '<span style="color:#f59e0b;">✋手動模式</span>' : '<span style="color:#6b7280;">⚙自動模式</span>'}</span>
               <div style="display:flex; gap:4px; flex-wrap:wrap; align-items:center;">
                 <button class="btn btn-sm btn-outline" style="padding:2px 8px; font-size:11px; height:26px;" onclick="app.adminModifyUserLevel('${u.id}', 1)"><i class="fa-solid fa-angles-up"></i> 升級</button>
                 <button class="btn btn-sm btn-outline" style="padding:2px 8px; font-size:11px; height:26px;" onclick="app.adminModifyUserLevel('${u.id}', -1)"><i class="fa-solid fa-angles-down"></i> 降級</button>
               </div>
               <div style="display:flex; gap:4px; flex-wrap:wrap; align-items:center; margin-top:2px;">
                 <input type="number" id="admin-level-input-${u.id}" class="form-control" style="padding:2px 6px; font-size:12px; height:26px; width:55px;" placeholder="1-10" min="1" max="10" value="">
-                <button class="btn btn-sm btn-creator" style="padding:2px 8px; font-size:11px; height:26px;" onclick="app.adminSetUserLevel('${u.id}')"><i class="fa-solid fa-sliders"></i> 設定</button>
+                <button class="btn btn-sm ${btnClass}" style="padding:2px 8px; font-size:11px; height:26px;" onclick="app.adminSetUserLevel('${u.id}')"><i class="fa-solid fa-sliders"></i> 設定</button>
                 ${isLvlOverridden ? `<button class="btn btn-sm btn-outline" style="padding:2px 8px; font-size:11px; height:26px; border-color:rgba(107,114,128,0.3); color:#6b7280;" onclick="app.adminResetUserLevel('${u.id}')"><i class="fa-solid fa-rotate-left"></i> 自動</button>` : ''}
               </div>
             </div>

@@ -133,38 +133,55 @@ class AppEngine {
       const sceneType = visual.getAttribute('data-scene-type');
       if (!sceneType) return;
 
-      // Gather all videos of this type from all approved products
-      const availableVideos = [];
+      // Gather all photos of products that have this scene type to use as thumbnails
+      const availablePhotos = [];
       approvedProducts.forEach(p => {
         if (p.scenes[sceneType] && Array.isArray(p.scenes[sceneType]) && p.scenes[sceneType].length > 0) {
-          availableVideos.push(...p.scenes[sceneType]);
+          if (p.photo_url) availablePhotos.push(p.photo_url);
         }
       });
 
-      // If no videos are available for this category, fallback to a random DEMO video to keep UI beautiful
-      let randomVideo = null;
-      if (availableVideos.length > 0) {
-        randomVideo = availableVideos[Math.floor(Math.random() * availableVideos.length)];
-      } else {
-        randomVideo = DEMO_VIDEOS[Math.floor(Math.random() * DEMO_VIDEOS.length)];
-      }
+      // If no photos are available, fallback to a random DEMO video (though ideally we should use demo photos, but we'll just use a placeholder or the demo video as a static poster)
+      let randomPhoto = null;
+      if (availablePhotos.length > 0) {
+        randomPhoto = availablePhotos[Math.floor(Math.random() * availablePhotos.length)];
+      } 
       
-      if (randomVideo) {
-        // Add video element (muted, autoplay, loop, playsinline)
-        const videoEl = document.createElement('video');
-        videoEl.src = randomVideo;
-        videoEl.muted = true;
-        videoEl.autoplay = true;
-        videoEl.loop = true;
-        videoEl.playsInline = true;
+      if (randomPhoto) {
+        // Add img element instead of video to save massive bandwidth
+        const imgEl = document.createElement('img');
+        imgEl.src = randomPhoto;
+        imgEl.style.width = '100%';
+        imgEl.style.height = '100%';
+        imgEl.style.objectFit = 'cover';
         
-        // Clear previous video if any
+        // Clear previous media if any
         const existingVideo = visual.querySelector('video');
-        if (existingVideo) {
-          existingVideo.remove();
-        }
+        const existingImg = visual.querySelector('img');
+        if (existingVideo) existingVideo.remove();
+        if (existingImg) existingImg.remove();
         
-        visual.appendChild(videoEl);
+        visual.appendChild(imgEl);
+      } else {
+        // Fallback to demo video but DO NOT autoplay it, only show poster to save bandwidth
+        const randomVideo = DEMO_VIDEOS[Math.floor(Math.random() * DEMO_VIDEOS.length)];
+        if (randomVideo) {
+          const videoEl = document.createElement('video');
+          videoEl.src = randomVideo;
+          videoEl.muted = true;
+          videoEl.autoplay = false; // Disabled autoplay to save bandwidth!
+          videoEl.controls = true;
+          videoEl.style.width = '100%';
+          videoEl.style.height = '100%';
+          videoEl.style.objectFit = 'cover';
+          
+          const existingVideo = visual.querySelector('video');
+          const existingImg = visual.querySelector('img');
+          if (existingVideo) existingVideo.remove();
+          if (existingImg) existingImg.remove();
+          
+          visual.appendChild(videoEl);
+        }
       }
     });
   }

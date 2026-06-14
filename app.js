@@ -2326,8 +2326,8 @@ class AppEngine {
     if (files.length > 0) {
       const validFiles = [];
       for (const file of files) {
-        if (file.size > 50 * 1024 * 1024) { // 50MB limit
-          alert(`❌ 影片 ${file.name} 檔案過大！\n為了確保手機能夠順利上傳且不閃退，請確保單個影片檔案不超過 50MB。建議您先壓縮影片後再上傳！`);
+        if (file.size > 500 * 1024 * 1024) { // 500MB limit
+          alert(`❌ 影片 ${file.name} 檔案過大！\n目前系統最高支援單個影片 500MB。`);
         } else {
           validFiles.push(file);
         }
@@ -2540,11 +2540,11 @@ class AppEngine {
       if (errMsg.includes('Bucket not found') || errMsg.includes('not found')) {
         alert(`❌ 上傳失敗：找不到儲存桶！\n請至 Supabase 控制台建立名為 'product-photos' 與 'product-videos' 的公開 (Public) Storage 儲存桶。`);
       } else if (errMsg.includes('exceeded') || errMsg.includes('too large') || errMsg.includes('413') || errMsg.includes('Payload')) {
-        alert(`❌ 上傳失敗：檔案過大！\n請確保影片檔案不超過 50MB、封面圖不超過 5MB。您可以先壓縮影片後再上傳。`);
+        alert(`❌ 上傳失敗：檔案過大！\n請確保影片檔案不超過 500MB、封面圖不超過 5MB。這通常是因為 Supabase 後台設定了檔案大小上限，請參考說明去後台修改限制。`);
       } else if (errMsg.includes('row-level security') || errMsg.includes('security') || errMsg.includes('policy') || errMsg.includes('403') || errMsg.includes('not authorized') || errMsg.includes('new row violates')) {
         alert(`❌ 上傳失敗：儲存桶權限不足！\n請至 Supabase Storage 設定，確認 'product-photos' 和 'product-videos' 儲存桶的存取政策(Policies)已設為允許公開上傳 (INSERT)。\n\n快速修復：到 Supabase → Storage → 點擊桶名 → Policies → 新增一條 INSERT 政策選擇 'For all users'。`);
       } else {
-        alert(`❌ 上傳失敗：${errMsg}\n\n常見原因：\n1. Supabase 儲存桶未建立或非公開\n2. 檔案太大（超過 50MB）\n3. 網路連線不穩定\n請檢查後重試。`);
+        alert(`❌ 上傳失敗：${errMsg}\n\n常見原因：\n1. Supabase 儲存桶未建立或非公開\n2. 檔案太大（超過 Supabase 後台限制）\n3. 網路連線不穩定\n請檢查後重試。`);
       }
     } finally {
       submitBtn.disabled = false;

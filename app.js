@@ -2297,16 +2297,24 @@ class AppEngine {
   previewProductPhoto(event) {
     const file = event.target.files[0];
     if (file) {
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+        alert(`❌ 封面圖片檔案過大！\n為了確保順利上傳且不閃退，請選擇 5MB 以下的圖片。`);
+        event.target.value = '';
+        return;
+      }
       this.selectedCoverPhoto = file;
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const preview = document.getElementById('photo-preview');
-        const placeholder = document.getElementById('photo-placeholder-content');
-        preview.src = e.target.result;
-        preview.classList.remove('hidden');
-        placeholder.classList.add('hidden');
-      };
-      reader.readAsDataURL(file);
+      const preview = document.getElementById('photo-preview');
+      const placeholder = document.getElementById('photo-placeholder-content');
+      
+      // Use createObjectURL instead of readAsDataURL to prevent huge memory spikes (OOM crashes) on mobile browsers
+      if (this.currentPreviewUrl) {
+        URL.revokeObjectURL(this.currentPreviewUrl);
+      }
+      this.currentPreviewUrl = URL.createObjectURL(file);
+      preview.src = this.currentPreviewUrl;
+      
+      preview.classList.remove('hidden');
+      placeholder.classList.add('hidden');
     }
   }
 
@@ -2316,7 +2324,23 @@ class AppEngine {
     if (!listContainer) return;
 
     if (files.length > 0) {
-      this.uploadedFiles[scene] = Array.from(files);
+      const validFiles = [];
+      for (const file of files) {
+        if (file.size > 50 * 1024 * 1024) { // 50MB limit
+          alert(`❌ 影片 ${file.name} 檔案過大！\n為了確保手機能夠順利上傳且不閃退，請確保單個影片檔案不超過 50MB。建議您先壓縮影片後再上傳！`);
+        } else {
+          validFiles.push(file);
+        }
+      }
+      
+      if (validFiles.length > 0) {
+        this.uploadedFiles[scene] = validFiles;
+      } else {
+        // Reset the file input if all selected files were invalid
+        event.target.value = '';
+        return;
+      }
+      
       listContainer.innerHTML = '';
 
       this.uploadedFiles[scene].forEach((file, index) => {

@@ -1237,14 +1237,17 @@ class AppEngine {
       localStorage.setItem('app_products', JSON.stringify(this.products));
       return success;
     }
+    // Non-cloud mode: localStorage save always succeeds
+    return true;
   }
 
   handleSyncError(table, error) {
-    if (error.message.includes('row-level security') || error.message.includes('RLS')) {
+    const msg = error.message || error.error || JSON.stringify(error) || 'Unknown error';
+    if (msg.includes('row-level security') || msg.includes('RLS')) {
       alert(`⚠️ 雲端資料庫儲存失敗：已被行級安全防護 (RLS) 封鎖！\n請至 Supabase -> SQL Editor 運行『ALTER TABLE ${table} DISABLE ROW LEVEL SECURITY;』來解鎖權限！`);
     } else {
-      console.error(`Cloud sync error for ${table}:`, error.message);
-      alert(`⚠️ 雲端庫同步失敗 (${table})\n錯誤: ${error.message}\n如果這是上傳商品，請注意這會導致重新整理後商品消失，請稍後再試。`);
+      console.error(`Cloud sync error for ${table}:`, msg);
+      alert(`⚠️ 雲端庫同步失敗 (${table})\n錯誤: ${msg}\n如果這是上傳商品，請注意這會導致重新整理後商品消失，請稍後再試。`);
     }
   }
 
@@ -2358,7 +2361,8 @@ class AppEngine {
       return;
     }
 
-    if (!preview.src || preview.src.includes('window.location')) {
+    // Check if a cover photo was actually selected (more reliable than checking preview.src)
+    if (!this.selectedCoverPhoto && (!preview.src || preview.src === '' || preview.src === window.location.href || preview.src.endsWith('/'))) {
       alert("請上傳正方形商品封面照！");
       return;
     }
@@ -2508,7 +2512,16 @@ class AppEngine {
       this.renderProducts();
     } catch (uploadErr) {
       console.error("Upload failed:", uploadErr);
-      alert(`❌ 上傳失敗：${uploadErr.message || uploadErr}\n請確保您的 Supabase 專案已經創立了名為 'product-photos' 與 'product-videos' 且設定為公開 (Public) 的 Storage 儲存桶。`);
+      let errMsg = uploadErr.message || uploadErr.error || JSON.stringify(uploadErr);
+      if (errMsg.includes('Bucket not found') || errMsg.includes('not found')) {
+        alert(`❌ 上傳失敗：找不到儲存桶！\n請至 Supabase 控制台建立名為 'product-photos' 與 'product-videos' 的公開 (Public) Storage 儲存桶。`);
+      } else if (errMsg.includes('exceeded') || errMsg.includes('too large') || errMsg.includes('413') || errMsg.includes('Payload')) {
+        alert(`❌ 上傳失敗：檔案過大！\n請確保影片檔案不超過 50MB、封面圖不超過 5MB。您可以先壓縮影片後再上傳。`);
+      } else if (errMsg.includes('row-level security') || errMsg.includes('security') || errMsg.includes('policy') || errMsg.includes('403') || errMsg.includes('not authorized') || errMsg.includes('new row violates')) {
+        alert(`❌ 上傳失敗：儲存桶權限不足！\n請至 Supabase Storage 設定，確認 'product-photos' 和 'product-videos' 儲存桶的存取政策(Policies)已設為允許公開上傳 (INSERT)。\n\n快速修復：到 Supabase → Storage → 點擊桶名 → Policies → 新增一條 INSERT 政策選擇 'For all users'。`);
+      } else {
+        alert(`❌ 上傳失敗：${errMsg}\n\n常見原因：\n1. Supabase 儲存桶未建立或非公開\n2. 檔案太大（超過 50MB）\n3. 網路連線不穩定\n請檢查後重試。`);
+      }
     } finally {
       submitBtn.disabled = false;
       submitBtn.innerHTML = originalBtnHtml;
@@ -2778,6 +2791,7 @@ class AppEngine {
     defaultOpt.innerText = '-- 請選擇商品分類 --';
     defaultOpt.disabled = true;
     defaultOpt.selected = true;
+    defaultOpt.hidden = true; // Hidden so it doesn't block validation on mobile
     selectEl.appendChild(defaultOpt);
 
     SHOPEE_CATEGORIES.forEach(cat => {

@@ -2326,8 +2326,8 @@ class AppEngine {
     if (files.length > 0) {
       const validFiles = [];
       for (const file of files) {
-        if (file.size > 500 * 1024 * 1024) { // 500MB limit
-          alert(`❌ 影片 ${file.name} 檔案過大！\n目前系統最高支援單個影片 500MB。`);
+        if (file.size > 50 * 1024 * 1024) { // 50MB limit (Supabase Free Plan hard limit)
+          alert(`❌ 影片「${file.name}」檔案過大 (${(file.size / 1024 / 1024).toFixed(1)}MB)！\n\n因為目前雲端伺服器限制，單個影片請勿超過 50MB。\n💡 建議解法：\n1. 在手機相簿將影片稍微剪短 (3~5秒即可)。\n2. 降低手機錄影畫質 (改用 1080p 而非 4K)。\n3. 使用影片壓縮 APP 處理後再上傳。`);
         } else {
           validFiles.push(file);
         }
@@ -2540,7 +2540,7 @@ class AppEngine {
       if (errMsg.includes('Bucket not found') || errMsg.includes('not found')) {
         alert(`❌ 上傳失敗：找不到儲存桶！\n請至 Supabase 控制台建立名為 'product-photos' 與 'product-videos' 的公開 (Public) Storage 儲存桶。`);
       } else if (errMsg.includes('exceeded') || errMsg.includes('too large') || errMsg.includes('413') || errMsg.includes('Payload')) {
-        alert(`❌ 上傳失敗：檔案過大！\n請確保影片檔案不超過 500MB、封面圖不超過 5MB。這通常是因為 Supabase 後台設定了檔案大小上限，請參考說明去後台修改限制。`);
+        alert(`❌ 上傳失敗：檔案過大！\n請確保影片檔案不超過 50MB、封面圖不超過 5MB。這是因為目前使用的是免費用戶方案限制，您可以先壓縮影片後再上傳。`);
       } else if (errMsg.includes('row-level security') || errMsg.includes('security') || errMsg.includes('policy') || errMsg.includes('403') || errMsg.includes('not authorized') || errMsg.includes('new row violates')) {
         alert(`❌ 上傳失敗：儲存桶權限不足！\n請至 Supabase Storage 設定，確認 'product-photos' 和 'product-videos' 儲存桶的存取政策(Policies)已設為允許公開上傳 (INSERT)。\n\n快速修復：到 Supabase → Storage → 點擊桶名 → Policies → 新增一條 INSERT 政策選擇 'For all users'。`);
       } else {

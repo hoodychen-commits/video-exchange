@@ -69,56 +69,75 @@ class AppEngine {
   }
 
   async init() {
-    // 1. Initialize database connection (Supabase if configured, otherwise fall back to LocalStorage)
-    await this.initDatabaseConnection();
+    try {
+      // 1. Initialize database connection (Supabase if configured, otherwise fall back to LocalStorage)
+      await this.initDatabaseConnection();
 
-    // 2. Load state from cloud or localStorage
-    await this.loadState();
+      // 2. Load state from cloud or localStorage
+      await this.loadState();
 
-    // Migrate any legacy IDs to clean UUIDs to prevent Supabase type mismatches
-    this.migrateMockIdsToUUIDs();
-    
-    // 3. Bind global security blockers
-    this.bindSecurityEvents();
-    
-    // 4. Check if user session already exists
-    this.checkSession();
+      // Migrate any legacy IDs to clean UUIDs to prevent Supabase type mismatches
+      this.migrateMockIdsToUUIDs();
+      
+      // 3. Bind global security blockers
+      this.bindSecurityEvents();
+      
+      // 4. Check if user session already exists
+      this.checkSession();
 
-    // 5. Initial render
-    this.populateCreatorCategoryDropdown();
-    this.renderSellerCategoryTabs();
-    this.renderNavigation();
-    this.renderProducts();
-    this.renderAdminPanels();
-    this.renderHomepageHeroVideos();
-    this.startFloatingWatermark();
-    
-    // Setup Admin Secure Hidden Entry Points
-    this.initAdminSecureEntry();
+      // 5. Initial render — split into two phases to avoid blocking the browser's main thread on mobile
+      this.populateCreatorCategoryDropdown();
+      this.renderSellerCategoryTabs();
+      this.renderNavigation();
+      this.renderProducts();
+      this.renderHomepageHeroVideos();
+      this.startFloatingWatermark();
+      
+      // Setup Admin Secure Hidden Entry Points
+      this.initAdminSecureEntry();
 
-    // Restore active view state across reloads
-    const savedView = localStorage.getItem('app_active_view');
-    if (this.currentUser) {
-      if (savedView) {
-        this.navigate(savedView);
-      } else if (this.currentUser.role === 'admin' || (this.currentUser.roles && this.currentUser.roles.includes('admin'))) {
-        this.navigate('admin');
-      } else {
-        this.navigate(this.currentUser.role);
-      }
-    } else {
-      this.navigate(savedView === 'home' || !savedView ? 'home' : 'home'); // Force home if not logged in
-    }
-
-    // Render database connection status
-    this.renderCloudStatusBanner();
-    
-    // Periodic synchronization alert mockup/actual sync toast
-    setInterval(() => {
+      // Restore active view state across reloads
+      const savedView = localStorage.getItem('app_active_view');
       if (this.currentUser) {
-        this.triggerCloudSyncToast(this.isCloudMode ? "雲端資料庫增量同步中..." : "實時雲端資料庫已同步更新...");
+        if (savedView) {
+          this.navigate(savedView);
+        } else if (this.currentUser.role === 'admin' || (this.currentUser.roles && this.currentUser.roles.includes('admin'))) {
+          this.navigate('admin');
+        } else {
+          this.navigate(this.currentUser.role);
+        }
+      } else {
+        this.navigate('home');
       }
-    }, 45000);
+
+      // Render database connection status
+      this.renderCloudStatusBanner();
+
+      // Defer heavy admin panel render so it doesn't block initial paint on mobile
+      setTimeout(() => {
+        try { this.renderAdminPanels(); } catch(e) { console.warn('deferred renderAdminPanels failed:', e); }
+      }, 300);
+      
+      // Periodic synchronization — reduced frequency to save mobile battery
+      setInterval(() => {
+        if (this.currentUser) {
+          try {
+            this.triggerCloudSyncToast(this.isCloudMode ? "雲端資料庫增量同步中..." : "實時雲端資料庫已同步更新...");
+          } catch(e) {}
+        }
+      }, 60000);
+    } catch(fatalErr) {
+      console.error('App init failed:', fatalErr);
+      // Show a user-friendly message instead of a blank crash page
+      document.body.innerHTML = `
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:32px;text-align:center;font-family:sans-serif;">
+          <div style="font-size:48px;margin-bottom:16px;">⚠️</div>
+          <h2 style="margin-bottom:12px;color:#1f2937;">網站暫時無法載入</h2>
+          <p style="color:#6b7280;margin-bottom:24px;">請確認您的網路連線後重新整理頁面</p>
+          <button onclick="location.reload()" style="background:#4f46e5;color:white;border:none;border-radius:12px;padding:14px 32px;font-size:16px;cursor:pointer;">🔄 重新整理</button>
+        </div>
+      `;
+    }
   }
 
   renderHomepageHeroVideos() {
@@ -1350,12 +1369,12 @@ class AppEngine {
   // 3. NAVIGATION & VIEW SYSTEM
   // --------------------------------------------------
   async navigate(viewId) {
+    try {
     // Persist view state so reloads stay on the same page
     localStorage.setItem('app_active_view', viewId);
 
     // Auth Wall check
     if (viewId !== 'home' && !this.currentUser) {
-      alert("請先完成註冊或登入後，即可開啟此版塊！");
       this.openAuthModal('register');
       return;
     }
@@ -1481,6 +1500,9 @@ class AppEngine {
     this.renderNavigation();
     this.renderUserGreeters();
     this.dismissGuard();
+    } catch(navErr) {
+      console.error('navigate error:', navErr);
+    }
   }
 
   renderNavigation() {
@@ -3745,10 +3767,18 @@ class AppEngine {
             const urls = p.scenes[key] || [];
             if (urls.length > 0) {
               urls.forEach((url, i) => {
+                // Use thumbnail + click-to-play instead of auto-loaded video to prevent iOS memory crashes
+                const isVideo = url.match(/\.(mp4|mov|avi|webm|mkv)/i);
+                const mediaHtml = isVideo
+                  ? `<div style="position:relative;flex-grow:1;min-height:100px;max-height:120px;background:#111;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;" onclick="this.innerHTML='<video src=\'${url}\' controls autoplay style=\'width:100%;height:100%;object-fit:contain;\'></video>'">
+                       <i class="fa-solid fa-circle-play" style="font-size:36px;color:rgba(255,255,255,0.8);"></i>
+                       <span style="position:absolute;bottom:4px;right:6px;font-size:10px;color:rgba(255,255,255,0.6);">點擊播放</span>
+                     </div>`
+                  : `<img src="${url}" style="flex-grow:1;min-height:100px;max-height:120px;object-fit:contain;border-radius:6px;" />`;
                 scenesGridHtml += `
                   <div class="admin-scene-player" style="position: relative; display: flex; flex-direction: column; justify-content: space-between; min-height: 180px;">
                     <span>${chineseScenes[key]} (#${i+1})</span>
-                    <video src="${url}" controls oncontextmenu="return false;" controlslist="nodownload" style="flex-grow: 1; min-height: 100px; max-height: 120px; object-fit: contain;"></video>
+                    ${mediaHtml}
                     <div style="display: flex; gap: 4px; margin-top: 6px;">
                       <button class="btn btn-sm btn-outline w-100" style="padding: 4px; font-size: 11px; font-weight: 700; border-color: rgba(79, 70, 229, 0.2);" onclick="app.adminEditProductScene('${p.id}', '${key}', ${i})">
                         <i class="fa-solid fa-pen"></i> 修改

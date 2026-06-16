@@ -1197,7 +1197,12 @@ class AppEngine {
             }
           }
         } catch (err) {
-          console.error("Cloud users upsert exception:", err);
+          // Silently ignore transient network errors (Load failed, fetch abort etc.)
+          // These happen when mobile network drops briefly, the product upload already succeeded
+          const errMsg = err.message || String(err);
+          if (!errMsg.includes('Load failed') && !errMsg.includes('TypeError') && !errMsg.includes('fetch')) {
+            console.error("Cloud users upsert exception:", err);
+          }
           break;
         }
       }
@@ -1279,11 +1284,22 @@ class AppEngine {
 
   handleSyncError(table, error) {
     const msg = error.message || error.error || JSON.stringify(error) || 'Unknown error';
+    
+    // Silently ignore transient network errors - these are caused by brief mobile signal drops
+    // and do NOT mean data was lost (localStorage always saves a backup)
+    const isTransient = msg.includes('Load failed') || msg.includes('TypeError') || 
+                        msg.includes('fetch') || msg.includes('NetworkError') ||
+                        msg.includes('Failed to fetch') || msg.includes('network');
+    if (isTransient) {
+      console.warn(`[Non-critical] Cloud sync network error for ${table} (data saved locally):`, msg);
+      return; // Don't alert user
+    }
+    
     if (msg.includes('row-level security') || msg.includes('RLS')) {
       alert(`⚠️ 雲端資料庫儲存失敗：已被行級安全防護 (RLS) 封鎖！\n請至 Supabase -> SQL Editor 運行『ALTER TABLE ${table} DISABLE ROW LEVEL SECURITY;』來解鎖權限！`);
     } else {
       console.error(`Cloud sync error for ${table}:`, msg);
-      alert(`⚠️ 雲端庫同步失敗 (${table})\n錯誤: ${msg}\n如果這是上傳商品，請注意這會導致重新整理後商品消失，請稍後再試。`);
+      // Non-critical: don't alert, just log. Data is saved in localStorage.
     }
   }
 

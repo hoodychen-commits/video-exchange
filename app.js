@@ -1803,7 +1803,8 @@ class AppEngine {
       role: defaultRole, // Current active role
       level: 1,
       balance: 0.00,       // Creator Cash Earnings (TWD)
-      seller_credits: 0,   // Seller points credits
+      seller_credits: 0,   // Paid credits (admin top-up only) — triggers creator commission on download
+      free_credits: 0,     // Free credits (system-awarded: upload bonus, quality bonus) — NO creator commission
       total_earnings: 0.00,
       passwordHash,
       created_at: new Date().toISOString()
@@ -2568,8 +2569,8 @@ class AppEngine {
       
       this.resetUploadForm();
 
-      // Award 5 seller_credits for uploading a new product
-      this.currentUser.seller_credits = (Number(this.currentUser.seller_credits) || 0) + 5;
+      // Award 5 FREE credits for uploading a new product (system-awarded, cannot trigger creator commission)
+      this.currentUser.free_credits = (Number(this.currentUser.free_credits) || 0) + 5;
       
       // Automatically assign seller role if not present
       if (!this.currentUser.roles.includes('seller')) {
@@ -2583,8 +2584,8 @@ class AppEngine {
       this.recalculateUserCreatorLevel(this.currentUser);
       await this.saveUsers([this.currentUser]);
 
-      this.triggerCloudSyncToast("商品素材上傳成功！已即時上架並獲得 5 點積分！");
-      alert("🎉 您的商品分鏡素材已成功上傳並即時上架！所有裝置（手機與電腦）均可同步看到！\n🎁 恭喜！您已獲得 5 點帶貨積分！");
+      this.triggerCloudSyncToast("商品素材上傳成功！已即時上架並獲得 5 點免費積分！");
+      alert("🎉 您的商品分鏡素材已成功上傳並即時上架！\n\n🎁 恭喜！您已獲得 5 點【免費帶貨積分】！\n\n💡 說明：\n• 免費積分：可用來下載素材，但不會產生創作者收益\n• 付費積分：儲值的點數，下載時創作者會獲得分成收益");
       
       this.renderCreatorStats();
       this.renderAdminPanels();
@@ -2800,14 +2801,34 @@ class AppEngine {
   renderSellerStats() {
     if (!this.currentUser) return;
 
-    // Re-sync seller_credits from the users array to pick up admin changes
+    // Re-sync credits from the users array to pick up admin changes
     const freshUser = this.users.find(u => u.id === this.currentUser.id);
     if (freshUser) {
       this.currentUser.seller_credits = freshUser.seller_credits;
+      this.currentUser.free_credits = freshUser.free_credits || 0;
     }
 
+    const freeCredits = Number(this.currentUser.free_credits) || 0;
+    const paidCredits = Number(this.currentUser.seller_credits) || 0;
+    const totalCredits = freeCredits + paidCredits;
+
     const credEl = document.getElementById('seller-credits');
-    if (credEl) credEl.innerText = this.currentUser.seller_credits;
+    if (credEl) {
+      credEl.innerHTML = `
+        <span style="font-size:22px;font-weight:800;color:var(--color-seller);">${totalCredits} 點</span>
+        <div style="margin-top:6px;display:flex;gap:10px;flex-wrap:wrap;">
+          <span style="font-size:12px;background:rgba(79,70,229,0.1);color:#4f46e5;padding:3px 10px;border-radius:20px;font-weight:600;">
+            🎁 免費積分：${freeCredits} 點
+          </span>
+          <span style="font-size:12px;background:rgba(16,185,129,0.1);color:#059669;padding:3px 10px;border-radius:20px;font-weight:600;">
+            💳 付費積分：${paidCredits} 點
+          </span>
+        </div>
+        <div style="margin-top:6px;font-size:11px;color:#9ca3af;">
+          ⚠️ 下載時優先消耗免費積分（不產生創作者收益），付費積分才會給創作者分成
+        </div>
+      `;
+    }
 
     this.renderSellerDeductionHistory();
   }
@@ -3269,23 +3290,39 @@ class AppEngine {
       return true; // Proceed with download without deducting
     }
 
-    if (this.currentUser.seller_credits < 5) {
-      alert("📥 下載失敗：您的積分點數餘額不足！請先儲值至少 5 點積分。");
+    // Calculate total available credits (free + paid)
+    const freeCredits = Number(this.currentUser.free_credits) || 0;
+    const paidCredits = Number(this.currentUser.seller_credits) || 0;
+    const totalCredits = freeCredits + paidCredits;
+    
+    if (totalCredits < 5) {
+      alert(`📥 下載失敗：您的積分點數餘額不足！\n目前積分：免費 ${freeCredits} 點 + 付費 ${paidCredits} 點 = 共 ${totalCredits} 點\n請先儲值至少 5 點積分。`);
       this.closeProductDetailModal();
       this.openRechargeModal();
       return false;
     }
 
-    this.currentUser.seller_credits -= 5;
+    // Spend free_credits first (no creator commission), then seller_credits (with commission)
+    let remaining = 5;
+    let paidUsed = 0;
+    if (freeCredits >= remaining) {
+      this.currentUser.free_credits = freeCredits - remaining;
+      paidUsed = 0;
+    } else {
+      this.currentUser.free_credits = 0;
+      remaining -= freeCredits;
+      this.currentUser.seller_credits = paidCredits - remaining;
+      paidUsed = remaining;
+    }
     
-    // Save seller credits
+    // Save buyer credits
     const sellerIdx = this.users.findIndex(u => u.id === this.currentUser.id);
     if (sellerIdx !== -1) {
       this.users[sellerIdx] = this.currentUser;
     }
 
-    // Reward Creator! 10 downloads = 3 TWD standard, scaled by level!
-    if (product) {
+    // Only reward creator if paid credits were used
+    if (product && paidUsed > 0) {
       const creator = this.users.find(u => u.id === product.creator_id);
       if (creator) {
         // Levels commission structure (LV1 = $1.0 per download, up to LV10 = $3.0 per download)
@@ -3300,6 +3337,13 @@ class AppEngine {
         if (prodIdx !== -1) {
           this.products[prodIdx] = product;
         }
+      }
+    } else if (product) {
+      // Still count downloads but no commission (free credits used)
+      product.downloads_count += 1;
+      const prodIdx = this.products.findIndex(p => p.id === product.id);
+      if (prodIdx !== -1) {
+        this.products[prodIdx] = product;
       }
     }
 
@@ -3985,9 +4029,10 @@ class AppEngine {
     const creator = this.users.find(u => u.id === p.creator_id);
     if (creator) {
       if (p.is_quality) {
-        creator.seller_credits = (Number(creator.seller_credits) || 0) + 15;
+        // High quality bonus goes to free_credits (system-awarded, no creator commission)
+        creator.free_credits = (Number(creator.free_credits) || 0) + 15;
       } else {
-        creator.seller_credits = Math.max(0, (Number(creator.seller_credits) || 0) - 15);
+        creator.free_credits = Math.max(0, (Number(creator.free_credits) || 0) - 15);
       }
       this.saveUsers([creator]);
       if (this.currentUser && this.currentUser.id === creator.id) {

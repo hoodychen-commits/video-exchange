@@ -609,11 +609,17 @@ class AppEngine {
             const isSeller = u.role === 'seller' || u.roles.includes('seller');
             const isCreator = u.role === 'creator' || u.roles.includes('creator');
             
-            // Decode seller_credits, level_override, and low_quality_count from email
+            // Decode seller_credits, level_override, low_quality_count, and free_credits from email
             let decodedSc = null;
             let decodedLo = null;
             let decodedLqc = null;
+            let decodedFc = null;
             if (u.email && typeof u.email === 'string') {
+              if (u.email.includes('|FC:')) {
+                const parts = u.email.split('|FC:');
+                decodedFc = parseInt(parts[1], 10);
+                u.email = parts[0];
+              }
               if (u.email.includes('|LQC:')) {
                 const parts = u.email.split('|LQC:');
                 decodedLqc = parseInt(parts[1], 10);
@@ -635,6 +641,14 @@ class AppEngine {
             }
             if (decodedLqc !== null && !isNaN(decodedLqc)) {
               u.low_quality_count = decodedLqc;
+            }
+            // Restore free_credits from email encoding
+            if (decodedFc !== null && !isNaN(decodedFc)) {
+              u.free_credits = decodedFc;
+            } else {
+              // Fallback to localStorage backup
+              const localMatch = localUsersFallback.find(lu => lu.id === u.id);
+              u.free_credits = localMatch ? (Number(localMatch.free_credits) || 0) : 0;
             }
 
             if (isSeller) {
@@ -1163,11 +1177,13 @@ class AppEngine {
         }
         // Encode missing columns into email for cloud sync
         if (!u.email) u.email = "user@material.exchange";
-        let emailBase = u.email.split('|SC:')[0].split('|LO:')[0].split('|LQC:')[0];
+        let emailBase = u.email.split('|SC:')[0].split('|LO:')[0].split('|LQC:')[0].split('|FC:')[0];
         let extra = "";
         if (isSeller && isCreator && Number(u.seller_credits)) extra += '|SC:' + Number(u.seller_credits);
         if (u.level_override !== undefined && u.level_override !== null) extra += '|LO:' + u.level_override;
         if (u.low_quality_count !== undefined && u.low_quality_count !== null) extra += '|LQC:' + u.low_quality_count;
+        // Always encode free_credits (exists for all roles)
+        if (Number(u.free_credits) > 0) extra += '|FC:' + Number(u.free_credits);
         u.email = emailBase + extra;
         return u;
       });
@@ -1422,13 +1438,19 @@ class AppEngine {
             if (!dbU.roles) dbU.roles = [dbU.role || 'creator'];
             if (!dbU.role) dbU.role = dbU.roles[0];
 
-            // Decode seller_credits, level_override, low_quality_count properly (same logic as loadState)
+            // Decode seller_credits, level_override, low_quality_count, free_credits (same logic as loadState)
             const isSeller = dbU.role === 'seller' || (dbU.roles && dbU.roles.includes('seller'));
             const isCreator = dbU.role === 'creator' || (dbU.roles && dbU.roles.includes('creator'));
             let decodedSc = null;
             let decodedLo = null;
             let decodedLqc = null;
+            let decodedFc = null;
             if (dbU.email && typeof dbU.email === 'string') {
+              if (dbU.email.includes('|FC:')) {
+                const parts = dbU.email.split('|FC:');
+                decodedFc = parseInt(parts[1], 10);
+                dbU.email = parts[0];
+              }
               if (dbU.email.includes('|LQC:')) {
                 const parts = dbU.email.split('|LQC:');
                 decodedLqc = parseInt(parts[1], 10);
@@ -1447,6 +1469,14 @@ class AppEngine {
             }
             if (decodedLo !== null && !isNaN(decodedLo)) dbU.level_override = decodedLo;
             if (decodedLqc !== null && !isNaN(decodedLqc)) dbU.low_quality_count = decodedLqc;
+            // Restore free_credits — prefer decoded value, fallback to in-memory
+            if (decodedFc !== null && !isNaN(decodedFc)) {
+              dbU.free_credits = decodedFc;
+            } else if (idx >= 0 && this.users[idx].free_credits !== undefined) {
+              dbU.free_credits = this.users[idx].free_credits;
+            } else {
+              dbU.free_credits = 0;
+            }
             if (isSeller) {
               if (!isCreator) {
                 dbU.seller_credits = Number(dbU.balance) || 0;

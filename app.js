@@ -3992,13 +3992,25 @@ class AppEngine {
         const hasSeller = u.role === 'seller' || (u.roles && u.roles.includes('seller'));
 
         if (hasSeller) {
+          const freeC = Number(u.free_credits) || 0;
+          const paidC = Number(u.seller_credits) || 0;
           modifyButtonsHtml += `
-            <div style="display:flex; flex-direction:column; gap:4px; border:1px solid rgba(16,185,129,0.2); padding:6px; border-radius:4px; background:rgba(16,185,129,0.02); min-width:180px;">
-              <span style="font-size:10px; font-weight:700; color:var(--color-seller);">[管理主播積分]</span>
+            <div style="display:flex; flex-direction:column; gap:6px; border:1px solid rgba(79,70,229,0.2); padding:6px; border-radius:4px; background:rgba(79,70,229,0.02); min-width:200px;">
+              <span style="font-size:10px; font-weight:700; color:#4f46e5;">🎁 免費積分 (不產生創作者收益)</span>
+              <span style="font-size:11px; color:#6b7280;">目前：${freeC} 點</span>
               <div style="display:flex; gap:4px; flex-wrap:wrap; align-items:center;">
-                <input type="number" id="admin-credits-input-${u.id}" class="form-control" style="padding:2px 6px; font-size:12px; height:26px; width:70px;" placeholder="數量">
-                <button class="btn btn-sm btn-seller" style="padding:2px 8px; font-size:11px; height:26px;" onclick="app.adminModifyUserCredits('${u.id}', 'add')">發放</button>
-                <button class="btn btn-sm btn-outline text-danger" style="padding:2px 8px; font-size:11px; height:26px; border-color:rgba(239,68,68,0.2);" onclick="app.adminModifyUserCredits('${u.id}', 'sub')">扣除</button>
+                <input type="number" id="admin-free-credits-input-${u.id}" class="form-control" style="padding:2px 6px; font-size:12px; height:26px; width:65px;" placeholder="數量">
+                <button class="btn btn-sm" style="padding:2px 8px; font-size:11px; height:26px; background:rgba(79,70,229,0.15); color:#4f46e5; border:1px solid rgba(79,70,229,0.3);" onclick="app.adminModifyUserCredits('${u.id}', 'add', 'free')">發放</button>
+                <button class="btn btn-sm btn-outline text-danger" style="padding:2px 8px; font-size:11px; height:26px; border-color:rgba(239,68,68,0.2);" onclick="app.adminModifyUserCredits('${u.id}', 'sub', 'free')">扣除</button>
+              </div>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:6px; border:1px solid rgba(16,185,129,0.2); padding:6px; border-radius:4px; background:rgba(16,185,129,0.02); min-width:200px;">
+              <span style="font-size:10px; font-weight:700; color:#059669;">💳 付費積分 (下載會給創作者收益)</span>
+              <span style="font-size:11px; color:#6b7280;">目前：${paidC} 點</span>
+              <div style="display:flex; gap:4px; flex-wrap:wrap; align-items:center;">
+                <input type="number" id="admin-paid-credits-input-${u.id}" class="form-control" style="padding:2px 6px; font-size:12px; height:26px; width:65px;" placeholder="數量">
+                <button class="btn btn-sm btn-seller" style="padding:2px 8px; font-size:11px; height:26px;" onclick="app.adminModifyUserCredits('${u.id}', 'add', 'paid')">發放</button>
+                <button class="btn btn-sm btn-outline text-danger" style="padding:2px 8px; font-size:11px; height:26px; border-color:rgba(239,68,68,0.2);" onclick="app.adminModifyUserCredits('${u.id}', 'sub', 'paid')">扣除</button>
               </div>
             </div>
           `;
@@ -4138,8 +4150,12 @@ class AppEngine {
     this.renderCreatorStats();
   }
 
-  async adminModifyUserCredits(userId, action) {
-    const inputEl = document.getElementById(`admin-credits-input-${userId}`);
+  async adminModifyUserCredits(userId, action, creditType = 'paid') {
+    // Choose the right input field based on credit type
+    const inputId = creditType === 'free'
+      ? `admin-free-credits-input-${userId}`
+      : `admin-paid-credits-input-${userId}`;
+    const inputEl = document.getElementById(inputId);
     if (!inputEl) return;
     
     const amount = parseInt(inputEl.value, 10);
@@ -4151,20 +4167,32 @@ class AppEngine {
     const u = this.users.find(x => x.id === userId);
     if (!u) return;
 
-    if (action === 'add') {
-      u.seller_credits = (Number(u.seller_credits) || 0) + amount;
+    if (creditType === 'free') {
+      // Free credits: system-awarded, do NOT trigger creator commission on download
+      if (action === 'add') {
+        u.free_credits = (Number(u.free_credits) || 0) + amount;
+      } else {
+        u.free_credits = Math.max(0, (Number(u.free_credits) || 0) - amount);
+      }
+      if (this.currentUser && this.currentUser.id === userId) {
+        this.currentUser.free_credits = u.free_credits;
+      }
+      this.triggerCloudSyncToast(`免費積分已${action === 'add' ? '發放' : '扣除'} ${amount} 點！`);
     } else {
-      u.seller_credits = Math.max(0, (Number(u.seller_credits) || 0) - amount);
-    }
-
-    // Sync currentUser reference if the modified user is the currently logged-in user
-    if (this.currentUser && this.currentUser.id === userId) {
-      this.currentUser.seller_credits = u.seller_credits;
+      // Paid credits: triggers creator commission on download
+      if (action === 'add') {
+        u.seller_credits = (Number(u.seller_credits) || 0) + amount;
+      } else {
+        u.seller_credits = Math.max(0, (Number(u.seller_credits) || 0) - amount);
+      }
+      if (this.currentUser && this.currentUser.id === userId) {
+        this.currentUser.seller_credits = u.seller_credits;
+      }
+      this.triggerCloudSyncToast(`付費積分已${action === 'add' ? '發放' : '扣除'} ${amount} 點！`);
     }
 
     await this.saveUsers([u]);
     
-    this.triggerCloudSyncToast("使用者帳戶餘額已手動變更完成！已同步至所有裝置！");
     inputEl.value = '';
     this.renderAdminPanels();
     this.renderCreatorStats();
